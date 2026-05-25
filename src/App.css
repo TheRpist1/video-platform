@@ -23,6 +23,12 @@
   to { transform: translateX(120%); opacity: 0; }
 }
 
+@keyframes heartBeat {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
 @keyframes floatGlow {
   0% { transform: translateY(0px) scale(1); filter: brightness(1); }
   50% { transform: translateY(-15px) scale(1.05); filter: brightness(1.2); }
@@ -1187,4 +1193,142 @@
 .btn-refresh:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.15);
+}
+
+/* -----------------------------------------
+   Rojbin'e Özel Aşk Teması (Love/Rose Theme)
+   ----------------------------------------- */
+.rojbin-theme {
+  --accent-purple: #f43f5e !important; /* Rose Red */
+  --accent-purple-glow: rgba(244, 63, 94, 0.4) !important;
+  --bg-glow-color-1: rgba(244, 63, 94, 0.18) !important;
+  --bg-glow-color-2: rgba(236, 72, 153, 0.12) !important;
+}
+
+/* Custom background glow override for Rojbin */
+.rojbin-theme.dashboard-container {
+  background: radial-gradient(circle at 50% 50%, #1e1015 0%, #0c0609 100%) !important;
+}
+
+/* Pink glow effect for panels */
+.rojbin-theme .glass {
+  background: rgba(30, 16, 21, 0.4) !important;
+  border: 1px solid rgba(244, 63, 94, 0.15) !important;
+  box-shadow: 0 8px 32px 0 rgba(244, 63, 94, 0.05) !important;
+}
+
+.rojbin-theme .glass-interactive:hover {
+  border-color: rgba(244, 63, 94, 0.35) !important;
+  box-shadow: 0 8px 32px 0 rgba(244, 63, 94, 0.15) !important;
+}
+
+/* Accent overrides for custom items */
+.rojbin-theme .logo-icon {
+  background: linear-gradient(135deg, #f43f5e, #ec4899) !important;
+  box-shadow: 0 0 15px rgba(244, 63, 94, 0.4) !important;
+}
+
+.rojbin-theme .logo-text {
+  background: linear-gradient(to right, #f43f5e, #f472b6) !important;
+  -webkit-background-clip: text !important;
+  background-clip: text !important;
+  color: transparent !important;
+}
+
+.rojbin-theme .btn-fullscreen {
+  background: rgba(244, 63, 94, 0.1) !important;
+  border-color: rgba(244, 63, 94, 0.25) !important;
+  color: #fda4af !important;
+}
+
+.rojbin-theme .btn-fullscreen:hover {
+  background: #f43f5e !important;
+  color: white !important;
+  box-shadow: 0 0 12px rgba(244, 63, 94, 0.4) !important;
+}
+
+.rojbin-theme .folder-item.active {
+  background: linear-gradient(135deg, rgba(244, 63, 94, 0.15), rgba(236, 72, 153, 0.05)) !important;
+  border-left: 4px solid #f43f5e !important;
+  color: #fda4af !important;
+}
+
+.rojbin-theme .subfolder-item.active {
+  background: rgba(244, 63, 94, 0.1) !important;
+  border-left: 3px solid #f43f5e !important;
+  color: #fda4af !important;
+}
+
+.rojbin-theme .video-badge {
+  background: rgba(244, 63, 94, 0.15) !important;
+  color: #fda4af !important;
+}
+
+.rojbin-theme .video-play-icon {
+  background: rgba(244, 63, 94, 0.15) !important;
+  color: #f43f5e !important;
+}
+
+.rojbin-theme .toast-success {
+  border-left: 4px solid #f43f5e !important;
+}
+
+/* Floating Hearts Elements */
+.floating-hearts-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 0; /* Behind panels, above background glow */
+  overflow: hidden;
+}
+
+.heart-bubble {
+  position: absolute;
+  bottom: -50px;
+  font-size: 20px;
+  opacity: 0;
+  animation: floatHeart 12s infinite linear;
+}
+
+@keyframes floatHeart {
+  0% {
+    transform: translateY(0) scale(0.5) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: 0.8;
+  }
+  90% {
+    opacity: 0.8;
+  }
+  100% {
+    transform: translateY(-105vh) scale(1.2) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+/* Individual Heart Placements, Speeds and Sizes */
+.h1 { left: 5%; animation-delay: 0s; animation-duration: 14s; font-size: 24px; }
+.h2 { left: 15%; animation-delay: 2s; animation-duration: 12s; font-size: 18px; }
+.h3 { left: 25%; animation-delay: 5s; animation-duration: 16s; font-size: 28px; }
+.h4 { left: 40%; animation-delay: 1s; animation-duration: 15s; font-size: 22px; }
+.h5 { left: 55%; animation-delay: 7s; animation-duration: 13s; font-size: 20px; }
+.h6 { left: 70%; animation-delay: 3s; animation-duration: 17s; font-size: 32px; }
+.h7 { left: 80%; animation-delay: 8s; animation-duration: 14s; font-size: 16px; }
+.h8 { left: 90%; animation-delay: 4s; animation-duration: 11s; font-size: 26px; }
+.h9 { left: 48%; animation-delay: 10s; animation-duration: 18s; font-size: 20px; }
+.h10 { left: 75%; animation-delay: 12s; animation-duration: 15s; font-size: 25px; }
+
+/* Custom watermark accent for Rojbin */
+.rojbin-theme .video-watermark {
+  background: rgba(244, 63, 94, 0.45) !important;
+  color: #fff !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  padding: 6px 14px !important;
+  border-radius: 20px !important;
+  font-weight: 700 !important;
+  box-shadow: 0 0 10px rgba(244, 63, 94, 0.6) !important;
 }

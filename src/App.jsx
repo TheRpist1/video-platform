@@ -43,6 +43,8 @@ function App() {
     user.email.toLowerCase().includes("gurbuz")
   );
 
+  const isRojbin = user && user.email && user.email.toLowerCase() === "rojbin@bilge.com";
+
   const [editingVideoIndex, setEditingVideoIndex] = useState(null);
   const [newVideoTitle, setNewVideoTitle] = useState("");
 
@@ -581,22 +583,35 @@ function App() {
           </div>
         </div>
       ) : (
-        /* --- Premium Authenticated Dashboard --- */
-        <div className="dashboard-container">
+        <div className={`dashboard-container ${isRojbin ? "rojbin-theme" : ""}`}>
+          {isRojbin && (
+            <div className="floating-hearts-container">
+              <div className="heart-bubble h1">❤️</div>
+              <div className="heart-bubble h2">💖</div>
+              <div className="heart-bubble h3">💕</div>
+              <div className="heart-bubble h4">💘</div>
+              <div className="heart-bubble h5">❤️</div>
+              <div className="heart-bubble h6">💝</div>
+              <div className="heart-bubble h7">✨</div>
+              <div className="heart-bubble h8">💖</div>
+              <div className="heart-bubble h9">💕</div>
+              <div className="heart-bubble h10">❤️</div>
+            </div>
+          )}
           
           {/* Header */}
           <header className="dashboard-header">
             <div className="header-logo">
-              <div className="logo-icon">TK</div>
+              <div className="logo-icon">{isRojbin ? "❤️" : "TK"}</div>
               <span className="logo-text">TusKıran</span>
             </div>
 
             <div className="header-user">
-              <div className="user-badge">
-                <span className="user-avatar">
-                  {user.email ? user.email.charAt(0).toUpperCase() : "U"}
+              <div className="user-badge" style={isRojbin ? { borderColor: "rgba(244, 63, 94, 0.4)", background: "rgba(244, 63, 94, 0.1)" } : {}}>
+                <span className="user-avatar" style={isRojbin ? { background: "linear-gradient(135deg, #f43f5e, #ec4899)", color: "white" } : {}}>
+                  {isRojbin ? "💝" : (user.email ? user.email.charAt(0).toUpperCase() : "U")}
                 </span>
-                <span>{user.email}</span>
+                <span style={isRojbin ? { color: "#fda4af", fontWeight: "700" } : {}}>{isRojbin ? "Rojbin ❤️" : user.email}</span>
               </div>
               
               <button className="btn-signout" onClick={handleSignOut}>
@@ -858,22 +873,28 @@ function App() {
                 </div>
               ) : !activeFolder ? (
                 /* Welcome Screen */
-                <div className="welcome-screen">
-                  <div className="welcome-icon-container">
-                    <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
-                      <line x1="7" y1="2" x2="7" y2="22"></line>
-                      <line x1="17" y1="2" x2="17" y2="22"></line>
-                      <line x1="2" y1="12" x2="22" y2="12"></line>
-                      <line x1="2" y1="7" x2="7" y2="7"></line>
-                      <line x1="2" y1="17" x2="7" y2="17"></line>
-                      <line x1="17" y1="17" x2="22" y2="17"></line>
-                      <line x1="17" y1="7" x2="22" y2="7"></line>
-                    </svg>
+                <div className="welcome-screen" style={isRojbin ? { animation: "fadeIn 0.5s ease-out", border: "1px dashed rgba(244, 63, 94, 0.3)", background: "rgba(244, 63, 94, 0.05)" } : {}}>
+                  <div className="welcome-icon-container" style={isRojbin ? { background: "rgba(244, 63, 94, 0.15)", color: "#f43f5e", animation: "heartBeat 1.5s infinite" } : {}}>
+                    {isRojbin ? "💖" : (
+                      <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
+                        <line x1="7" y1="2" x2="7" y2="22"></line>
+                        <line x1="17" y1="2" x2="17" y2="22"></line>
+                        <line x1="2" y1="12" x2="22" y2="12"></line>
+                        <line x1="2" y1="7" x2="7" y2="7"></line>
+                        <line x1="2" y1="17" x2="7" y2="17"></line>
+                        <line x1="17" y1="17" x2="22" y2="17"></line>
+                        <line x1="17" y1="7" x2="22" y2="7"></line>
+                      </svg>
+                    )}
                   </div>
-                  <h2 className="welcome-title">İzlemeye Başlayın</h2>
-                  <p className="welcome-desc">
-                    Özel eğitim ve video içeriklerinize erişmek için sol taraftaki menüden bir klasör seçin.
+                  <h2 className="welcome-title" style={isRojbin ? { color: "#fda4af" } : {}}>
+                    {isRojbin ? "Hoş Geldin Sevgilim, İyi ki Varsın! ❤️" : "İzlemeye Başlayın"}
+                  </h2>
+                  <p className="welcome-desc" style={isRojbin ? { color: "#f472b6" } : {}}>
+                    {isRojbin 
+                      ? "Senin için özel hazırlanan eğitim içeriklerine sol taraftaki menüden ulaşabilirsin. Başarılar dilerim sevgilim! 💕" 
+                      : "Özel eğitim ve video içeriklerinize erişmek için sol taraftaki menüden bir klasör seçin."}
                   </p>
                 </div>
               ) : (
@@ -965,7 +986,9 @@ function App() {
                                       
                                       {/* SECURE FLOATING WATERMARK */}
                                       <div className="video-watermark">
-                                        {user.email} • {new Date().toLocaleDateString("tr-TR")}
+                                        {isRojbin 
+                                          ? `Rojbin ❤️ Bilge • ${new Date().toLocaleDateString("tr-TR")}` 
+                                          : `${user.email} • ${new Date().toLocaleDateString("tr-TR")}`}
                                       </div>
 
                                       <iframe
