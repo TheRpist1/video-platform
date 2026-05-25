@@ -30,6 +30,18 @@ function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [toasts, setToasts] = useState([]);
 
+  // Admin configurations
+  const ADMIN_EMAILS = ["admin@tuskiran.com", "bilge@tuskiran.com", "bilgeerngurbuz@gmail.com", "admin@gmail.com"];
+  const isAdmin = user && (
+    ADMIN_EMAILS.includes(user.email.toLowerCase()) || 
+    user.email.toLowerCase().includes("admin") || 
+    user.email.toLowerCase().includes("bilge") ||
+    user.email.toLowerCase().includes("gurbuz")
+  );
+
+  const [editingVideoIndex, setEditingVideoIndex] = useState(null);
+  const [newVideoTitle, setNewVideoTitle] = useState("");
+
   // Handle auto-authentication monitoring
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -192,6 +204,54 @@ function App() {
     }
     
     return "Adsız Klasör";
+  };
+
+  const saveVideoTitle = async (index) => {
+    if (!newVideoTitle.trim()) {
+      showToast("Hata", "Video ismi boş olamaz.", "error");
+      return;
+    }
+
+    try {
+      const updatedVideos = activeFolder.videos.map((videoItem, idx) => {
+        if (idx === index) {
+          const isObject = typeof videoItem === "object" && videoItem !== null;
+          const videoUrl = isObject ? (videoItem.url || videoItem.link || "") : videoItem;
+          
+          if (isObject) {
+            // Find existing title key or default to "title"
+            const titleKey = Object.keys(videoItem).find(k => 
+              /title|name|baslik|isim|label|header/i.test(k)
+            ) || "title";
+            
+            return {
+              ...videoItem,
+              [titleKey]: newVideoTitle
+            };
+          } else {
+            return {
+              title: newVideoTitle,
+              url: videoUrl
+            };
+          }
+        }
+        return videoItem;
+      });
+
+      // Update Firestore doc
+      const folderRef = doc(db, "folders", activeFolder.id);
+      await setDoc(folderRef, { videos: updatedVideos }, { merge: true });
+
+      // Update local state
+      setFolders(prev => 
+        prev.map(f => f.id === activeFolder.id ? { ...f, videos: updatedVideos } : f)
+      );
+
+      showToast("Başarılı", "Video ismi başarıyla güncellendi.", "success");
+      setEditingVideoIndex(null);
+    } catch (err) {
+      showToast("Hata", "Video ismi güncellenirken bir hata oluştu.", "error");
+    }
   };
 
   const getActiveFolder = () => {
@@ -462,7 +522,48 @@ function App() {
                                   </svg>
                                 </span>
                                 <div>
-                                  <div className="video-label-title">{videoTitle}</div>
+                                  {editingVideoIndex === index ? (
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "4px 0" }}>
+                                      <input
+                                        type="text"
+                                        className="input-field"
+                                        style={{ padding: "6px 12px", fontSize: "13px", width: "180px" }}
+                                        value={newVideoTitle}
+                                        onChange={(e) => setNewVideoTitle(e.target.value)}
+                                        autoFocus
+                                      />
+                                      <button 
+                                        className="btn-fullscreen" 
+                                        style={{ padding: "6px 10px", background: "var(--accent-purple)", color: "white", borderColor: "transparent" }}
+                                        onClick={() => saveVideoTitle(index)}
+                                      >
+                                        Kaydet
+                                      </button>
+                                      <button 
+                                        className="btn-signout" 
+                                        style={{ padding: "6px 10px" }}
+                                        onClick={() => setEditingVideoIndex(null)}
+                                      >
+                                        İptal
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                      <div className="video-label-title">{videoTitle}</div>
+                                      {isAdmin && (
+                                        <button 
+                                          onClick={() => { setEditingVideoIndex(index); setNewVideoTitle(videoTitle); }}
+                                          style={{ background: "none", border: "none", color: "var(--accent-purple)", cursor: "pointer", padding: "4px", display: "flex", alignItems: "center" }}
+                                          title="İsmi Düzenle"
+                                        >
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                          </svg>
+                                        </button>
+                                      )}
+                                    </div>
+                                  )}
                                   <div className="video-label-index">Yayında</div>
                                 </div>
                               </div>
