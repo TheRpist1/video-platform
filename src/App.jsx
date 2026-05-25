@@ -394,8 +394,24 @@ function App() {
                     {activeFolder.videos && activeFolder.videos.length > 0 ? (
                       activeFolder.videos.map((videoItem, index) => {
                         const isObject = typeof videoItem === "object" && videoItem !== null;
-                        const videoUrl = isObject ? (videoItem.url || videoItem.link || "") : videoItem;
-                        const videoTitle = isObject ? (videoItem.title || videoItem.name || `Video #${index + 1}`) : `Video #${index + 1}`;
+                        let videoUrl = "";
+                        let videoTitle = `Video #${index + 1}`;
+
+                        if (isObject) {
+                          // Dynamically find title key (matches title, name, baslik, isim, label, etc.)
+                          const titleKey = Object.keys(videoItem).find(k => 
+                            /title|name|baslik|isim|label|header/i.test(k)
+                          );
+                          videoTitle = titleKey ? videoItem[titleKey] : `Video #${index + 1}`;
+
+                          // Dynamically find url key (matches url, link, src, href, path, etc.)
+                          const urlKey = Object.keys(videoItem).find(k => 
+                            /url|link|src|href|path/i.test(k)
+                          );
+                          videoUrl = urlKey ? videoItem[urlKey] : "";
+                        } else {
+                          videoUrl = videoItem;
+                        }
 
                         return (
                           <div key={index} className="video-card">
