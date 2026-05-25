@@ -34,7 +34,7 @@ function App() {
 
   // Admin configurations
   const ADMIN_EMAILS = ["admin@tuskiran.com", "bilge@tuskiran.com", "bilgeerngurbuz@gmail.com", "admin@gmail.com"];
-  const isAdmin = user && (
+  const isAdmin = user && user.email && (
     ADMIN_EMAILS.includes(user.email.toLowerCase()) || 
     user.email.toLowerCase().includes("admin") || 
     user.email.toLowerCase().includes("bilge") ||
@@ -209,7 +209,7 @@ function App() {
   };
   const handleSelectFolder = (folder) => {
     setActiveFolderId(folder.id);
-    if (folder.subfolders && folder.subfolders.length > 0) {
+    if (Array.isArray(folder.subfolders) && folder.subfolders.length > 0) {
       setExpandedFolderIds(prev => ({ ...prev, [folder.id]: true }));
       setActiveSubfolderId(folder.subfolders[0].id); // Auto-select first subfolder
     } else {
@@ -478,10 +478,10 @@ function App() {
               
               <div className="folders-list">
                 {folders.map((folder) => {
-                  const hasSubfolders = folder.subfolders && folder.subfolders.length > 0;
+                  const hasSubfolders = Array.isArray(folder.subfolders) && folder.subfolders.length > 0;
                   const totalVideos = hasSubfolders 
-                    ? folder.subfolders.reduce((acc, sf) => acc + (sf.videos ? sf.videos.length : 0), 0)
-                    : (folder.videos ? folder.videos.length : 0);
+                    ? folder.subfolders.reduce((acc, sf) => acc + (Array.isArray(sf.videos) ? sf.videos.length : 0), 0)
+                    : (Array.isArray(folder.videos) ? folder.videos.length : 0);
                   const isExpanded = expandedFolderIds[folder.id];
 
                   return (
@@ -563,7 +563,7 @@ function App() {
               ) : (
                 /* Video Section Stream */
                 <>
-                  {activeFolder.subfolders && activeFolder.subfolders.length > 0 && !activeSubfolderId ? (
+                  {Array.isArray(activeFolder.subfolders) && activeFolder.subfolders.length > 0 && !activeSubfolderId ? (
                     /* Subfolder Overview Selection Grid */
                     <div style={{ display: "flex", flexDirection: "column", gap: "16px", animation: "fadeIn 0.4s" }}>
                       <div className="video-section-header">
@@ -590,7 +590,7 @@ function App() {
                               {getSubfolderName(sf)}
                             </h3>
                             <span className="folder-count-badge" style={{ marginTop: "12px", background: "rgba(139,92,246,0.12)", color: "var(--accent-purple)", fontWeight: "600" }}>
-                              {sf.videos ? sf.videos.length : 0} Video
+                              {Array.isArray(sf.videos) ? sf.videos.length : 0} Video
                             </span>
                           </div>
                         ))}
@@ -603,7 +603,7 @@ function App() {
                       const headerTitle = activeSubfolder 
                         ? `${getFolderName(activeFolder)} ↳ ${getSubfolderName(activeSubfolder)}` 
                         : getFolderName(activeFolder);
-                      const totalVideosCount = videosToRender ? videosToRender.length : 0;
+                      const totalVideosCount = Array.isArray(videosToRender) ? videosToRender.length : 0;
 
                       return (
                         <>
@@ -619,7 +619,7 @@ function App() {
                           </div>
 
                           <div className="video-grid">
-                            {videosToRender && videosToRender.length > 0 ? (
+                            {Array.isArray(videosToRender) && videosToRender.length > 0 ? (
                               videosToRender.map((videoItem, index) => {
                                 const isObject = typeof videoItem === "object" && videoItem !== null;
                                 let videoUrl = "";
