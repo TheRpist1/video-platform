@@ -831,3 +831,74 @@
     align-self: flex-end;
   }
 }
+
+/* -----------------------------------------
+   Fullscreen Secure Watermark Elements & Buttons
+   ----------------------------------------- */
+.btn-fullscreen {
+  padding: 8px 16px;
+  background: rgba(139, 92, 246, 0.08);
+  border: 1px solid rgba(139, 92, 246, 0.2);
+  border-radius: 8px;
+  color: var(--accent-purple);
+  font-family: var(--font-heading);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-fullscreen:hover {
+  background: var(--accent-purple);
+  color: var(--text-primary);
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.35);
+}
+
+.video-player-container:fullscreen {
+  width: 100vw !important;
+  height: 100vh !important;
+  aspect-ratio: auto !important;
+  background: #000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  border-radius: 0 !important;
+}
+
+.video-player-container:fullscreen .video-iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+}
+
+.video-player-container:fullscreen .video-watermark {
+  z-index: 2147483647 !important;
+  font-size: 24px !important;
+  color: rgba(255, 255, 255, 0.28) !important;
+  background: rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Vendor prefixes for fullscreen */
+.video-player-container:-webkit-full-screen {
+  width: 100vw !important;
+  height: 100vh !important;
+  aspect-ratio: auto !important;
+  background: #000 !important;
+}
+
+.video-player-container:-webkit-full-screen .video-iframe {
+  width: 100% !important;
+  height: 100% !important;
+  border-radius: 0 !important;
+}
+
+.video-player-container:-webkit-full-screen .video-watermark {
+  z-index: 2147483647 !important;
+  font-size: 24px !important;
+  color: rgba(255, 255, 255, 0.28) !important;
+}

@@ -158,6 +158,21 @@ function App() {
     }
   };
 
+  const handleFullscreen = (index) => {
+    const container = document.getElementById(`player-container-${index}`);
+    if (container) {
+      if (container.requestFullscreen) {
+        container.requestFullscreen();
+      } else if (container.webkitRequestFullscreen) {
+        container.webkitRequestFullscreen();
+      } else if (container.mozRequestFullScreen) {
+        container.mozRequestFullScreen();
+      } else if (container.msRequestFullscreen) {
+        container.msRequestFullscreen();
+      }
+    }
+  };
+
   const getActiveFolder = () => {
     return folders.find((f) => f.id === activeFolderId) || null;
   };
@@ -204,7 +219,7 @@ function App() {
                   <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
                 </svg>
               </div>
-              <h1 className="login-title">Video Platform</h1>
+              <h1 className="login-title">TusKıran</h1>
               <p className="login-subtitle">Devam etmek için hesabınıza giriş yapın</p>
             </div>
 
@@ -290,8 +305,8 @@ function App() {
           {/* Header */}
           <header className="dashboard-header">
             <div className="header-logo">
-              <div className="logo-icon">VP</div>
-              <span className="logo-text">Video Platform</span>
+              <div className="logo-icon">TK</div>
+              <span className="logo-text">TusKıran</span>
             </div>
 
             <div className="header-user">
@@ -381,7 +396,7 @@ function App() {
                         <div key={index} className="video-card">
                           
                           {/* Cinema Player View with watermark */}
-                          <div className="video-player-container">
+                          <div className="video-player-container" id={`player-container-${index}`}>
                             
                             {/* SECURE FLOATING WATERMARK */}
                             <div className="video-watermark">
@@ -409,7 +424,15 @@ function App() {
                                 <div className="video-label-index">Yayında</div>
                               </div>
                             </div>
-                            <span className="video-badge">Özel İçerik</span>
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                              <button className="btn-fullscreen" onClick={() => handleFullscreen(index)}>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                                </svg>
+                                Tam Ekran
+                              </button>
+                              <span className="video-badge">Özel İçerik</span>
+                            </div>
                           </div>
 
                         </div>
