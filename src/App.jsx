@@ -175,10 +175,23 @@ function App() {
 
   const getFolderName = (folder) => {
     if (!folder) return "";
+    
+    // 1. Try to find dynamic keys inside document fields (excluding the 'id' field itself)
     const key = Object.keys(folder).find(k => 
-      /title|name|baslik|isim|label|folder/i.test(k)
+      /title|name|baslik|isim|label|folder/i.test(k) && k !== "id"
     );
-    return key ? folder[key] : "Adsız Klasör";
+    
+    if (key && folder[key]) {
+      return folder[key];
+    }
+    
+    // 2. Fallback to document ID if no field matches
+    if (folder.id) {
+      // Capitalize the first letter for a clean premium look (e.g. 'farmakoloji' -> 'Farmakoloji')
+      return folder.id.charAt(0).toUpperCase() + folder.id.slice(1);
+    }
+    
+    return "Adsız Klasör";
   };
 
   const getActiveFolder = () => {
