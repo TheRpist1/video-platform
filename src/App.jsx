@@ -392,51 +392,57 @@ function App() {
 
                   <div className="video-grid">
                     {activeFolder.videos && activeFolder.videos.length > 0 ? (
-                      activeFolder.videos.map((videoUrl, index) => (
-                        <div key={index} className="video-card">
-                          
-                          {/* Cinema Player View with watermark */}
-                          <div className="video-player-container" id={`player-container-${index}`}>
+                      activeFolder.videos.map((videoItem, index) => {
+                        const isObject = typeof videoItem === "object" && videoItem !== null;
+                        const videoUrl = isObject ? (videoItem.url || videoItem.link || "") : videoItem;
+                        const videoTitle = isObject ? (videoItem.title || videoItem.name || `Video #${index + 1}`) : `Video #${index + 1}`;
+
+                        return (
+                          <div key={index} className="video-card">
                             
-                            {/* SECURE FLOATING WATERMARK */}
-                            <div className="video-watermark">
-                              {user.email} • {new Date().toLocaleDateString("tr-TR")}
+                            {/* Cinema Player View with watermark */}
+                            <div className="video-player-container" id={`player-container-${index}`}>
+                              
+                              {/* SECURE FLOATING WATERMARK */}
+                              <div className="video-watermark">
+                                {user.email} • {new Date().toLocaleDateString("tr-TR")}
+                              </div>
+
+                              <iframe
+                                src={videoUrl}
+                                className="video-iframe"
+                                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                                allowFullScreen
+                              />
                             </div>
 
-                            <iframe
-                              src={videoUrl}
-                              className="video-iframe"
-                              allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                              allowFullScreen
-                            />
-                          </div>
-
-                          {/* Info footer under player */}
-                          <div className="video-info-bar">
-                            <div className="video-title-container">
-                              <span className="video-play-icon">
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                  <path d="M8 5v14l11-7z"></path>
-                                </svg>
-                              </span>
-                              <div>
-                                <div className="video-label-title">Video #{index + 1}</div>
-                                <div className="video-label-index">Yayında</div>
+                            {/* Info footer under player */}
+                            <div className="video-info-bar">
+                              <div className="video-title-container">
+                                <span className="video-play-icon">
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M8 5v14l11-7z"></path>
+                                  </svg>
+                                </span>
+                                <div>
+                                  <div className="video-label-title">{videoTitle}</div>
+                                  <div className="video-label-index">Yayında</div>
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                <button className="btn-fullscreen" onClick={() => handleFullscreen(index)}>
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                                  </svg>
+                                  Tam Ekran
+                                </button>
+                                <span className="video-badge">Özel İçerik</span>
                               </div>
                             </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                              <button className="btn-fullscreen" onClick={() => handleFullscreen(index)}>
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
-                                </svg>
-                                Tam Ekran
-                              </button>
-                              <span className="video-badge">Özel İçerik</span>
-                            </div>
-                          </div>
 
-                        </div>
-                      ))
+                          </div>
+                        );
+                      })
                     ) : (
                       <div className="welcome-screen">
                         <div className="welcome-icon-container">📭</div>
