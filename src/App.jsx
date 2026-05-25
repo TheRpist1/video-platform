@@ -190,12 +190,15 @@ function App() {
   const getFolderName = (folder) => {
     if (!folder) return "";
     
-    // 1. Try to find dynamic keys inside document fields (excluding the 'id' field itself)
+    // 1. Try to find dynamic keys inside document fields (excluding metadata/arrays like subfolders, videos, id)
     const key = Object.keys(folder).find(k => 
-      /title|name|baslik|isim|label|folder/i.test(k) && k !== "id"
+      /title|name|baslik|isim|label/i.test(k) && 
+      k !== "id" && 
+      k !== "subfolders" && 
+      k !== "videos"
     );
     
-    if (key && folder[key]) {
+    if (key && folder[key] && typeof folder[key] === "string") {
       return folder[key];
     }
     
@@ -228,9 +231,11 @@ function App() {
   const getSubfolderName = (sf) => {
     if (!sf) return "";
     const key = Object.keys(sf).find(k => 
-      /title|name|baslik|isim|label/i.test(k) && k !== "id"
+      /title|name|baslik|isim|label/i.test(k) && 
+      k !== "id" && 
+      k !== "videos"
     );
-    return key ? sf[key] : (sf.id ? (sf.id.charAt(0).toUpperCase() + sf.id.slice(1)) : "Alt Klasör");
+    return key && typeof sf[key] === "string" ? sf[key] : (sf.id ? (sf.id.charAt(0).toUpperCase() + sf.id.slice(1)) : "Alt Klasör");
   };
 
   const saveVideoTitle = async (index) => {
