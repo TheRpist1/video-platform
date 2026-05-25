@@ -314,8 +314,8 @@ function App() {
   const activeFolder = getActiveFolder();
 
   const getActiveSubfolder = () => {
-    if (!activeFolder || !activeFolder.subfolders || !activeSubfolderId) return null;
-    return activeFolder.subfolders.find(sf => sf.id === activeSubfolderId) || null;
+    if (!activeFolder || !Array.isArray(activeFolder.subfolders) || !activeSubfolderId) return null;
+    return activeFolder.subfolders.filter(sf => sf !== null).find(sf => sf.id === activeSubfolderId) || null;
   };
 
   const activeSubfolder = getActiveSubfolder();
@@ -512,7 +512,7 @@ function App() {
 
                       {hasSubfolders && (
                         <div className={`folder-sub-list ${isExpanded ? "expanded" : ""}`}>
-                          {folder.subfolders.map((subfolder) => (
+                          {folder.subfolders.filter(sf => sf !== null).map((subfolder) => (
                             <button
                               key={subfolder.id}
                               className={`subfolder-item ${activeFolderId === folder.id && activeSubfolderId === subfolder.id ? "active" : ""}`}
@@ -526,7 +526,7 @@ function App() {
                                 <span>{getSubfolderName(subfolder)}</span>
                               </div>
                               <span className="folder-count-badge">
-                                {subfolder.videos ? subfolder.videos.length : 0} Video
+                                {Array.isArray(subfolder.videos) ? subfolder.videos.length : 0} Video
                               </span>
                             </button>
                           ))}
@@ -578,7 +578,7 @@ function App() {
                       </div>
 
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "20px", marginTop: "12px" }}>
-                        {activeFolder.subfolders.map((sf) => (
+                        {activeFolder.subfolders.filter(sf => sf !== null).map((sf) => (
                           <div 
                             key={sf.id} 
                             className="video-card glass glass-interactive" 
