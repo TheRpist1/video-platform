@@ -173,6 +173,14 @@ function App() {
     }
   };
 
+  const getFolderName = (folder) => {
+    if (!folder) return "";
+    const key = Object.keys(folder).find(k => 
+      /title|name|baslik|isim|label|folder/i.test(k)
+    );
+    return key ? folder[key] : "Adsız Klasör";
+  };
+
   const getActiveFolder = () => {
     return folders.find((f) => f.id === activeFolderId) || null;
   };
@@ -344,7 +352,7 @@ function App() {
                   >
                     <div className="folder-item-left">
                       <span className="folder-item-icon">📁</span>
-                      <span>{folder.title}</span>
+                      <span>{getFolderName(folder)}</span>
                     </div>
                     <span className="folder-count-badge">
                       {folder.videos ? folder.videos.length : 0} Video
@@ -382,7 +390,7 @@ function App() {
                   <div className="video-section-header">
                     <div>
                       <h2 className="section-title">
-                        <span>📁</span> {activeFolder.title}
+                        <span>📁</span> {getFolderName(activeFolder)}
                       </h2>
                       <p className="section-subtitle">
                         Bu klasörde {activeFolder.videos ? activeFolder.videos.length : 0} adet video listeleniyor.
