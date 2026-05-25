@@ -902,3 +902,92 @@
   font-size: 24px !important;
   color: rgba(255, 255, 255, 0.28) !important;
 }
+
+/* -----------------------------------------
+   Subfolders Sidebar Navigation & Animation Styles
+   ----------------------------------------- */
+.folder-sub-list {
+  padding-left: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease-out;
+}
+
+.folder-sub-list.expanded {
+  max-height: 500px;
+  opacity: 1;
+}
+
+.subfolder-item {
+  width: 100%;
+  padding: 8px 12px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.subfolder-item:hover {
+  background: rgba(255, 255, 255, 0.02);
+  color: var(--text-primary);
+}
+
+.subfolder-item.active {
+  background: rgba(139, 92, 246, 0.08);
+  border-color: rgba(139, 92, 246, 0.18);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.subfolder-item-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.subfolder-item-icon {
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: transform 0.25s;
+}
+
+.subfolder-item:hover .subfolder-item-icon {
+  transform: scale(1.1);
+}
+
+.subfolder-item.active .subfolder-item-icon {
+  color: var(--accent-purple);
+}
+
+.chevron-icon {
+  width: 12px;
+  height: 12px;
+  color: var(--text-muted);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), color 0.3s;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chevron-icon.rotated {
+  transform: rotate(90deg);
+  color: var(--accent-purple);
+}

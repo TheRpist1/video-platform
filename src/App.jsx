@@ -24,6 +24,8 @@ function App() {
   const [user, setUser] = useState(null);
   const [folders, setFolders] = useState([]);
   const [activeFolderId, setActiveFolderId] = useState(null);
+  const [activeSubfolderId, setActiveSubfolderId] = useState(null);
+  const [expandedFolderIds, setExpandedFolderIds] = useState({});
   
   // Custom interactive states
   const [showPassword, setShowPassword] = useState(false);
@@ -205,6 +207,31 @@ function App() {
     
     return "Adsız Klasör";
   };
+  const handleSelectFolder = (folder) => {
+    setActiveFolderId(folder.id);
+    if (folder.subfolders && folder.subfolders.length > 0) {
+      setExpandedFolderIds(prev => ({ ...prev, [folder.id]: true }));
+      setActiveSubfolderId(folder.subfolders[0].id); // Auto-select first subfolder
+    } else {
+      setActiveSubfolderId(null);
+    }
+  };
+
+  const toggleFolderExpand = (folderId, e) => {
+    if (e) e.stopPropagation();
+    setExpandedFolderIds(prev => ({
+      ...prev,
+      [folderId]: !prev[folderId]
+    }));
+  };
+
+  const getSubfolderName = (sf) => {
+    if (!sf) return "";
+    const key = Object.keys(sf).find(k => 
+      /title|name|baslik|isim|label/i.test(k) && k !== "id"
+    );
+    return key ? sf[key] : (sf.id ? (sf.id.charAt(0).toUpperCase() + sf.id.slice(1)) : "Alt Klasör");
+  };
 
   const saveVideoTitle = async (index) => {
     if (!newVideoTitle.trim()) {
@@ -213,39 +240,65 @@ function App() {
     }
 
     try {
-      const updatedVideos = activeFolder.videos.map((videoItem, idx) => {
-        if (idx === index) {
-          const isObject = typeof videoItem === "object" && videoItem !== null;
-          const videoUrl = isObject ? (videoItem.url || videoItem.link || "") : videoItem;
-          
-          if (isObject) {
-            // Find existing title key or default to "title"
-            const titleKey = Object.keys(videoItem).find(k => 
-              /title|name|baslik|isim|label|header/i.test(k)
-            ) || "title";
-            
-            return {
-              ...videoItem,
-              [titleKey]: newVideoTitle
-            };
-          } else {
-            return {
-              title: newVideoTitle,
-              url: videoUrl
-            };
+      let updatedVideos;
+      let updatedSubfolders;
+
+      if (activeSubfolder) {
+        // Update video item inside subfolder
+        updatedVideos = activeSubfolder.videos.map((videoItem, idx) => {
+          if (idx === index) {
+            const isObject = typeof videoItem === "object" && videoItem !== null;
+            const videoUrl = isObject ? (videoItem.url || videoItem.link || "") : videoItem;
+            if (isObject) {
+              const titleKey = Object.keys(videoItem).find(k => /title|name|baslik|isim|label/i.test(k)) || "title";
+              return { ...videoItem, [titleKey]: newVideoTitle };
+            } else {
+              return { title: newVideoTitle, url: videoUrl };
+            }
           }
-        }
-        return videoItem;
-      });
+          return videoItem;
+        });
 
-      // Update Firestore doc
-      const folderRef = doc(db, "folders", activeFolder.id);
-      await setDoc(folderRef, { videos: updatedVideos }, { merge: true });
+        updatedSubfolders = activeFolder.subfolders.map(sf => {
+          if (sf.id === activeSubfolder.id) {
+            return { ...sf, videos: updatedVideos };
+          }
+          return sf;
+        });
 
-      // Update local state
-      setFolders(prev => 
-        prev.map(f => f.id === activeFolder.id ? { ...f, videos: updatedVideos } : f)
-      );
+        // Update Firestore doc
+        const folderRef = doc(db, "folders", activeFolder.id);
+        await setDoc(folderRef, { subfolders: updatedSubfolders }, { merge: true });
+
+        // Update local state
+        setFolders(prev => 
+          prev.map(f => f.id === activeFolder.id ? { ...f, subfolders: updatedSubfolders } : f)
+        );
+      } else {
+        // Update video item in flat folder
+        updatedVideos = activeFolder.videos.map((videoItem, idx) => {
+          if (idx === index) {
+            const isObject = typeof videoItem === "object" && videoItem !== null;
+            const videoUrl = isObject ? (videoItem.url || videoItem.link || "") : videoItem;
+            if (isObject) {
+              const titleKey = Object.keys(videoItem).find(k => /title|name|baslik|isim|label/i.test(k)) || "title";
+              return { ...videoItem, [titleKey]: newVideoTitle };
+            } else {
+              return { title: newVideoTitle, url: videoUrl };
+            }
+          }
+          return videoItem;
+        });
+
+        // Update Firestore doc
+        const folderRef = doc(db, "folders", activeFolder.id);
+        await setDoc(folderRef, { videos: updatedVideos }, { merge: true });
+
+        // Update local state
+        setFolders(prev => 
+          prev.map(f => f.id === activeFolder.id ? { ...f, videos: updatedVideos } : f)
+        );
+      }
 
       showToast("Başarılı", "Video ismi başarıyla güncellendi.", "success");
       setEditingVideoIndex(null);
@@ -259,6 +312,13 @@ function App() {
   };
 
   const activeFolder = getActiveFolder();
+
+  const getActiveSubfolder = () => {
+    if (!activeFolder || !activeFolder.subfolders || !activeSubfolderId) return null;
+    return activeFolder.subfolders.find(sf => sf.id === activeSubfolderId) || null;
+  };
+
+  const activeSubfolder = getActiveSubfolder();
 
   return (
     <>
@@ -417,21 +477,64 @@ function App() {
               <div className="sidebar-title">Klasörler</div>
               
               <div className="folders-list">
-                {folders.map((folder) => (
-                  <button
-                    key={folder.id}
-                    className={`folder-item ${activeFolderId === folder.id ? "active" : ""}`}
-                    onClick={() => setActiveFolderId(folder.id)}
-                  >
-                    <div className="folder-item-left">
-                      <span className="folder-item-icon">📁</span>
-                      <span>{getFolderName(folder)}</span>
+                {folders.map((folder) => {
+                  const hasSubfolders = folder.subfolders && folder.subfolders.length > 0;
+                  const totalVideos = hasSubfolders 
+                    ? folder.subfolders.reduce((acc, sf) => acc + (sf.videos ? sf.videos.length : 0), 0)
+                    : (folder.videos ? folder.videos.length : 0);
+                  const isExpanded = expandedFolderIds[folder.id];
+
+                  return (
+                    <div key={folder.id} style={{ display: "flex", flexDirection: "column" }}>
+                      <button
+                        className={`folder-item ${activeFolderId === folder.id && !activeSubfolderId ? "active" : ""}`}
+                        onClick={() => handleSelectFolder(folder)}
+                      >
+                        <div className="folder-item-left">
+                          {hasSubfolders && (
+                            <span 
+                              className={`chevron-icon ${isExpanded ? "rotated" : ""}`}
+                              onClick={(e) => toggleFolderExpand(folder.id, e)}
+                              style={{ marginRight: "4px", display: "inline-flex", cursor: "pointer" }}
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                                <polyline points="9 18 15 12 9 6"></polyline>
+                              </svg>
+                            </span>
+                          )}
+                          <span className="folder-item-icon">📁</span>
+                          <span>{getFolderName(folder)}</span>
+                        </div>
+                        <span className="folder-count-badge">
+                          {totalVideos} Video
+                        </span>
+                      </button>
+
+                      {hasSubfolders && (
+                        <div className={`folder-sub-list ${isExpanded ? "expanded" : ""}`}>
+                          {folder.subfolders.map((subfolder) => (
+                            <button
+                              key={subfolder.id}
+                              className={`subfolder-item ${activeFolderId === folder.id && activeSubfolderId === subfolder.id ? "active" : ""}`}
+                              onClick={() => {
+                                setActiveFolderId(folder.id);
+                                setActiveSubfolderId(subfolder.id);
+                              }}
+                            >
+                              <div className="subfolder-item-left">
+                                <span className="subfolder-item-icon">↳ 📁</span>
+                                <span>{getSubfolderName(subfolder)}</span>
+                              </div>
+                              <span className="folder-count-badge">
+                                {subfolder.videos ? subfolder.videos.length : 0} Video
+                              </span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                    <span className="folder-count-badge">
-                      {folder.videos ? folder.videos.length : 0} Video
-                    </span>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             </aside>
 
@@ -460,137 +563,185 @@ function App() {
               ) : (
                 /* Video Section Stream */
                 <>
-                  <div className="video-section-header">
-                    <div>
-                      <h2 className="section-title">
-                        <span>📁</span> {getFolderName(activeFolder)}
-                      </h2>
-                      <p className="section-subtitle">
-                        Bu klasörde {activeFolder.videos ? activeFolder.videos.length : 0} adet video listeleniyor.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="video-grid">
-                    {activeFolder.videos && activeFolder.videos.length > 0 ? (
-                      activeFolder.videos.map((videoItem, index) => {
-                        const isObject = typeof videoItem === "object" && videoItem !== null;
-                        let videoUrl = "";
-                        let videoTitle = `Video #${index + 1}`;
-
-                        if (isObject) {
-                          // Dynamically find title key (matches title, name, baslik, isim, label, etc.)
-                          const titleKey = Object.keys(videoItem).find(k => 
-                            /title|name|baslik|isim|label|header/i.test(k)
-                          );
-                          videoTitle = titleKey ? videoItem[titleKey] : `Video #${index + 1}`;
-
-                          // Dynamically find url key (matches url, link, src, href, path, etc.)
-                          const urlKey = Object.keys(videoItem).find(k => 
-                            /url|link|src|href|path/i.test(k)
-                          );
-                          videoUrl = urlKey ? videoItem[urlKey] : "";
-                        } else {
-                          videoUrl = videoItem;
-                        }
-
-                        return (
-                          <div key={index} className="video-card">
-                            
-                            {/* Cinema Player View with watermark */}
-                            <div className="video-player-container" id={`player-container-${index}`}>
-                              
-                              {/* SECURE FLOATING WATERMARK */}
-                              <div className="video-watermark">
-                                {user.email} • {new Date().toLocaleDateString("tr-TR")}
-                              </div>
-
-                              <iframe
-                                src={videoUrl}
-                                className="video-iframe"
-                                allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
-                                allowFullScreen
-                              />
-                            </div>
-
-                            {/* Info footer under player */}
-                            <div className="video-info-bar">
-                              <div className="video-title-container">
-                                <span className="video-play-icon">
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-                                    <path d="M8 5v14l11-7z"></path>
-                                  </svg>
-                                </span>
-                                <div>
-                                  {editingVideoIndex === index ? (
-                                    <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "4px 0" }}>
-                                      <input
-                                        type="text"
-                                        className="input-field"
-                                        style={{ padding: "6px 12px", fontSize: "13px", width: "180px" }}
-                                        value={newVideoTitle}
-                                        onChange={(e) => setNewVideoTitle(e.target.value)}
-                                        autoFocus
-                                      />
-                                      <button 
-                                        className="btn-fullscreen" 
-                                        style={{ padding: "6px 10px", background: "var(--accent-purple)", color: "white", borderColor: "transparent" }}
-                                        onClick={() => saveVideoTitle(index)}
-                                      >
-                                        Kaydet
-                                      </button>
-                                      <button 
-                                        className="btn-signout" 
-                                        style={{ padding: "6px 10px" }}
-                                        onClick={() => setEditingVideoIndex(null)}
-                                      >
-                                        İptal
-                                      </button>
-                                    </div>
-                                  ) : (
-                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                      <div className="video-label-title">{videoTitle}</div>
-                                      {isAdmin && (
-                                        <button 
-                                          onClick={() => { setEditingVideoIndex(index); setNewVideoTitle(videoTitle); }}
-                                          style={{ background: "none", border: "none", color: "var(--accent-purple)", cursor: "pointer", padding: "4px", display: "flex", alignItems: "center" }}
-                                          title="İsmi Düzenle"
-                                        >
-                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
-                                            <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
-                                          </svg>
-                                        </button>
-                                      )}
-                                    </div>
-                                  )}
-                                  <div className="video-label-index">Yayında</div>
-                                </div>
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                                <button className="btn-fullscreen" onClick={() => handleFullscreen(index)}>
-                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                    <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
-                                  </svg>
-                                  Tam Ekran
-                                </button>
-                                <span className="video-badge">Özel İçerik</span>
-                              </div>
-                            </div>
-
-                          </div>
-                        );
-                      })
-                    ) : (
-                      <div className="welcome-screen">
-                        <div className="welcome-icon-container">📭</div>
-                        <h3 className="welcome-title">Bu klasör henüz boş</h3>
-                        <p className="welcome-desc">
-                          Bu klasörde oynatılacak herhangi bir video bulunmamaktadır.
-                        </p>
+                  {activeFolder.subfolders && activeFolder.subfolders.length > 0 && !activeSubfolderId ? (
+                    /* Subfolder Overview Selection Grid */
+                    <div style={{ display: "flex", flexDirection: "column", gap: "16px", animation: "fadeIn 0.4s" }}>
+                      <div className="video-section-header">
+                        <div>
+                          <h2 className="section-title">
+                            <span>📁</span> {getFolderName(activeFolder)}
+                          </h2>
+                          <p className="section-subtitle">
+                            Lütfen ders içeriklerine erişmek için aşağıdaki alt klasörlerden birini seçin.
+                          </p>
+                        </div>
                       </div>
-                    )}
-                  </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "20px", marginTop: "12px" }}>
+                        {activeFolder.subfolders.map((sf) => (
+                          <div 
+                            key={sf.id} 
+                            className="video-card glass glass-interactive" 
+                            style={{ padding: "28px 24px", cursor: "pointer", display: "flex", flexDirection: "column", gap: "12px", alignItems: "flex-start", borderRadius: "16px" }}
+                            onClick={() => setActiveSubfolderId(sf.id)}
+                          >
+                            <span style={{ fontSize: "36px", filter: "drop-shadow(0 4px 8px rgba(139,92,246,0.3))" }}>📁</span>
+                            <h3 style={{ fontSize: "16px", fontWeight: "600", color: "var(--text-primary)", marginTop: "4px" }}>
+                              {getSubfolderName(sf)}
+                            </h3>
+                            <span className="folder-count-badge" style={{ marginTop: "12px", background: "rgba(139,92,246,0.12)", color: "var(--accent-purple)", fontWeight: "600" }}>
+                              {sf.videos ? sf.videos.length : 0} Video
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    /* Video Stream (Normal or Subfolder) */
+                    (() => {
+                      const videosToRender = activeSubfolder ? activeSubfolder.videos : activeFolder.videos;
+                      const headerTitle = activeSubfolder 
+                        ? `${getFolderName(activeFolder)} ↳ ${getSubfolderName(activeSubfolder)}` 
+                        : getFolderName(activeFolder);
+                      const totalVideosCount = videosToRender ? videosToRender.length : 0;
+
+                      return (
+                        <>
+                          <div className="video-section-header">
+                            <div>
+                              <h2 className="section-title">
+                                <span>📁</span> {headerTitle}
+                              </h2>
+                              <p className="section-subtitle">
+                                Bu klasörde {totalVideosCount} adet video listeleniyor.
+                              </p>
+                            </div>
+                          </div>
+
+                          <div className="video-grid">
+                            {videosToRender && videosToRender.length > 0 ? (
+                              videosToRender.map((videoItem, index) => {
+                                const isObject = typeof videoItem === "object" && videoItem !== null;
+                                let videoUrl = "";
+                                let videoTitle = `Video #${index + 1}`;
+
+                                if (isObject) {
+                                  // Dynamically find title key
+                                  const titleKey = Object.keys(videoItem).find(k => 
+                                    /title|name|baslik|isim|label|header/i.test(k)
+                                  );
+                                  videoTitle = titleKey ? videoItem[titleKey] : `Video #${index + 1}`;
+
+                                  // Dynamically find url key
+                                  const urlKey = Object.keys(videoItem).find(k => 
+                                    /url|link|src|href|path/i.test(k)
+                                  );
+                                  videoUrl = urlKey ? videoItem[urlKey] : "";
+                                } else {
+                                  videoUrl = videoItem;
+                                }
+
+                                return (
+                                  <div key={index} className="video-card">
+                                    
+                                    {/* Cinema Player View with watermark */}
+                                    <div className="video-player-container" id={`player-container-${index}`}>
+                                      
+                                      {/* SECURE FLOATING WATERMARK */}
+                                      <div className="video-watermark">
+                                        {user.email} • {new Date().toLocaleDateString("tr-TR")}
+                                      </div>
+
+                                      <iframe
+                                        src={videoUrl}
+                                        className="video-iframe"
+                                        allow="accelerometer; gyroscope; autoplay; encrypted-media; picture-in-picture;"
+                                        allowFullScreen
+                                      />
+                                    </div>
+
+                                    {/* Info footer under player */}
+                                    <div className="video-info-bar">
+                                      <div className="video-title-container">
+                                        <span className="video-play-icon">
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                            <path d="M8 5v14l11-7z"></path>
+                                          </svg>
+                                        </span>
+                                        <div>
+                                          {editingVideoIndex === index ? (
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px", margin: "4px 0" }}>
+                                              <input
+                                                type="text"
+                                                className="input-field"
+                                                style={{ padding: "6px 12px", fontSize: "13px", width: "180px" }}
+                                                value={newVideoTitle}
+                                                onChange={(e) => setNewVideoTitle(e.target.value)}
+                                                autoFocus
+                                              />
+                                              <button 
+                                                className="btn-fullscreen" 
+                                                style={{ padding: "6px 10px", background: "var(--accent-purple)", color: "white", borderColor: "transparent" }}
+                                                onClick={() => saveVideoTitle(index)}
+                                              >
+                                                Kaydet
+                                              </button>
+                                              <button 
+                                                className="btn-signout" 
+                                                style={{ padding: "6px 10px" }}
+                                                onClick={() => setEditingVideoIndex(null)}
+                                              >
+                                                İptal
+                                              </button>
+                                            </div>
+                                          ) : (
+                                            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                              <div className="video-label-title">{videoTitle}</div>
+                                              {isAdmin && (
+                                                <button 
+                                                  onClick={() => { setEditingVideoIndex(index); setNewVideoTitle(videoTitle); }}
+                                                  style={{ background: "none", border: "none", color: "var(--accent-purple)", cursor: "pointer", padding: "4px", display: "flex", alignItems: "center" }}
+                                                  title="İsmi Düzenle"
+                                                >
+                                                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                                    <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                                  </svg>
+                                                </button>
+                                              )}
+                                            </div>
+                                          )}
+                                          <div className="video-label-index">Yayında</div>
+                                        </div>
+                                      </div>
+                                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                        <button className="btn-fullscreen" onClick={() => handleFullscreen(index)}>
+                                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                            <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
+                                          </svg>
+                                          Tam Ekran
+                                        </button>
+                                        <span className="video-badge">Özel İçerik</span>
+                                      </div>
+                                    </div>
+
+                                  </div>
+                                );
+                              })
+                            ) : (
+                              <div className="welcome-screen">
+                                <div className="welcome-icon-container">📭</div>
+                                <h3 className="welcome-title">Bu klasör henüz boş</h3>
+                                <p className="welcome-desc">
+                                  Bu klasörde oynatılacak herhangi bir video bulunmamaktadır.
+                                </p>
+                              </div>
+                            )}
+                          </div>
+                        </>
+                      );
+                    })()
+                  )}
                 </>
               )}
             </main>
