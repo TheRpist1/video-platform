@@ -971,8 +971,14 @@ function App() {
               ) : !activeFolder ? (
                 /* Welcome Screen */
                 <div className="welcome-screen" style={isRojbin ? { animation: "fadeIn 0.5s ease-out", border: "1px dashed rgba(244, 63, 94, 0.3)", background: "rgba(244, 63, 94, 0.05)" } : {}}>
-                  <div className="welcome-icon-container" style={isRojbin ? { background: "rgba(244, 63, 94, 0.15)", color: "#f43f5e", animation: "heartBeat 1.5s infinite" } : {}}>
-                    {isRojbin ? "💖" : (
+                  {isRojbin ? (
+                    <div className="love-photo-frame">
+                      <img src="/biz.jpg" className="love-photo" alt="Biz ❤️" />
+                      <div className="love-photo-glow"></div>
+                      <span className="love-photo-heart-tag">💖 B & R 💖</span>
+                    </div>
+                  ) : (
+                    <div className="welcome-icon-container">
                       <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"></rect>
                         <line x1="7" y1="2" x2="7" y2="22"></line>
@@ -983,8 +989,8 @@ function App() {
                         <line x1="17" y1="17" x2="22" y2="17"></line>
                         <line x1="17" y1="7" x2="22" y2="7"></line>
                       </svg>
-                    )}
-                  </div>
+                    </div>
+                  )}
                   <h2 className="welcome-title" style={isRojbin ? { color: "#fda4af" } : {}}>
                     {isRojbin ? "Hoş Geldin Sevgilim, İyi ki Varsın! ❤️" : "İzlemeye Başlayın"}
                   </h2>
