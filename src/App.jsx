@@ -69,7 +69,7 @@ function App() {
   }, [isRojbin]);
 
   // Dynamic Romantic Music Player for Rojbin
-  const [isMuted, setIsMuted] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef(null);
 
   useEffect(() => {
@@ -77,17 +77,19 @@ function App() {
       if (audioRef.current) {
         audioRef.current.pause();
       }
+      setIsPlaying(false);
       return;
     }
 
-    const audio = new Audio("https://assets.mixkit.co/music/preview/mixkit-beautiful-dream-493.mp3");
+    const audio = new Audio("/sebebi-gozlerin.mp3");
     audio.loop = true;
-    audio.volume = 0.3; // Low soft background volume
+    audio.volume = 0.45; // Soft yet audible volume
     audioRef.current = audio;
 
     const playAudio = () => {
       audio.play().then(() => {
-        console.log("Romantic music started playing successfully!");
+        console.log("Sebebi Gözlerin started playing successfully!");
+        setIsPlaying(true);
         window.removeEventListener("click", playAudio);
       }).catch((err) => {
         console.log("Browser blocked autoplay, waiting for first click to play.");
@@ -105,15 +107,17 @@ function App() {
 
   const toggleMusic = () => {
     if (!audioRef.current) return;
-    if (isMuted) {
+    if (!isPlaying) {
       audioRef.current.play().then(() => {
-        setIsMuted(false);
-        showToast("Müzik Açıldı", "Aşk melodisi arka planda çalıyor. 🌸", "success");
+        setIsPlaying(true);
+        showToast("Müzik Açıldı", "Sebebi Gözlerin çalıyor... ❤️", "success");
+      }).catch((err) => {
+        console.error("Playback error:", err);
       });
     } else {
       audioRef.current.pause();
-      setIsMuted(true);
-      showToast("Müzik Duraklatıldı", "Aşk melodisi sessize alındı. 🔇", "info");
+      setIsPlaying(false);
+      showToast("Müzik Duraklatıldı", "Sebebi Gözlerin duraklatıldı. 🔇", "info");
     }
   };
 
@@ -1180,21 +1184,21 @@ function App() {
           </div>
           {isRojbin && (
             <button 
-              className={`music-controller-btn glass ${isMuted ? "muted" : "playing"}`} 
+              className={`music-controller-btn glass ${!isPlaying ? "muted" : "playing"}`} 
               onClick={toggleMusic}
-              title={isMuted ? "Müziği Başlat 🎵" : "Müziği Durdur 🔇"}
+              title={!isPlaying ? "Müziği Başlat 🎵" : "Müziği Durdur 🔇"}
             >
               <span className="music-icon">
-                {isMuted ? "🔇" : "🎵"}
+                {!isPlaying ? "🔇" : "🎵"}
               </span>
-              {!isMuted && (
+              {isPlaying && (
                 <div className="music-waves">
                   <span className="wave w1"></span>
                   <span className="wave w2"></span>
                   <span className="wave w3"></span>
                 </div>
               )}
-              <span className="music-label">{isMuted ? "Müzik Kapalı" : "Aşk Melodisi"}</span>
+              <span className="music-label">{!isPlaying ? "Müzik Kapalı" : "Sebebi Gözlerin"}</span>
             </button>
           )}
         </div>
