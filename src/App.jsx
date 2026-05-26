@@ -45,6 +45,29 @@ function App() {
 
   const isRojbin = user && user.email && user.email.toLowerCase() === "rojbin@bilge.com";
 
+  const [clickHearts, setClickHearts] = useState([]);
+
+  useEffect(() => {
+    if (!isRojbin) return;
+
+    const handleGlobalClick = (e) => {
+      const id = Date.now() + Math.random().toString(36).substr(2, 9);
+      const x = e.clientX;
+      const y = e.clientY;
+      const symbols = ["❤️", "💖", "💕", "💘", "💝", "🌸", "✨"];
+      const symbol = symbols[Math.floor(Math.random() * symbols.length)];
+
+      setClickHearts((prev) => [...prev, { id, x, y, symbol }]);
+
+      setTimeout(() => {
+        setClickHearts((prev) => prev.filter((h) => h.id !== id));
+      }, 1000);
+    };
+
+    window.addEventListener("click", handleGlobalClick);
+    return () => window.removeEventListener("click", handleGlobalClick);
+  }, [isRojbin]);
+
   const [editingVideoIndex, setEditingVideoIndex] = useState(null);
   const [newVideoTitle, setNewVideoTitle] = useState("");
 
@@ -585,18 +608,39 @@ function App() {
       ) : (
         <div className={`dashboard-container ${isRojbin ? "rojbin-theme" : ""}`}>
           {isRojbin && (
-            <div className="floating-hearts-container">
-              <div className="heart-bubble h1">❤️</div>
-              <div className="heart-bubble h2">💖</div>
-              <div className="heart-bubble h3">💕</div>
-              <div className="heart-bubble h4">💘</div>
-              <div className="heart-bubble h5">❤️</div>
-              <div className="heart-bubble h6">💝</div>
-              <div className="heart-bubble h7">✨</div>
-              <div className="heart-bubble h8">💖</div>
-              <div className="heart-bubble h9">💕</div>
-              <div className="heart-bubble h10">❤️</div>
-            </div>
+            <>
+              <div className="floating-hearts-container">
+                <div className="heart-bubble h1">❤️</div>
+                <div className="heart-bubble h2">💖</div>
+                <div className="heart-bubble h3">💕</div>
+                <div className="heart-bubble h4">💘</div>
+                <div className="heart-bubble h5">❤️</div>
+                <div className="heart-bubble h6">💝</div>
+                <div className="heart-bubble h7">✨</div>
+                <div className="heart-bubble h8">💖</div>
+                <div className="heart-bubble h9">💕</div>
+                <div className="heart-bubble h10">❤️</div>
+                <div className="heart-bubble h11">💖</div>
+                <div className="heart-bubble h12">💕</div>
+                <div className="heart-bubble h13">💘</div>
+                <div className="heart-bubble h14">💝</div>
+                <div className="heart-bubble h15">❤️</div>
+                <div className="heart-bubble h16">✨</div>
+                <div className="heart-bubble h17">💖</div>
+                <div className="heart-bubble h18">💕</div>
+                <div className="heart-bubble h19">💝</div>
+                <div className="heart-bubble h20">❤️</div>
+              </div>
+              {clickHearts.map((h) => (
+                <span
+                  key={h.id}
+                  className="click-heart"
+                  style={{ left: h.x, top: h.y }}
+                >
+                  {h.symbol}
+                </span>
+              ))}
+            </>
           )}
           
           {/* Header */}

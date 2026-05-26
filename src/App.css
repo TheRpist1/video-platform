@@ -1295,17 +1295,21 @@
 
 @keyframes floatHeart {
   0% {
-    transform: translateY(0) scale(0.5) rotate(0deg);
+    transform: translateY(0) scale(0.5) translateX(0) rotate(0deg);
     opacity: 0;
   }
   10% {
     opacity: 0.8;
   }
+  50% {
+    transform: translateY(-50vh) scale(0.95) translateX(15px) rotate(180deg);
+    opacity: 0.9;
+  }
   90% {
     opacity: 0.8;
   }
   100% {
-    transform: translateY(-105vh) scale(1.2) rotate(360deg);
+    transform: translateY(-105vh) scale(1.2) translateX(-15px) rotate(360deg);
     opacity: 0;
   }
 }
@@ -1321,6 +1325,16 @@
 .h8 { left: 90%; animation-delay: 4s; animation-duration: 11s; font-size: 26px; }
 .h9 { left: 48%; animation-delay: 10s; animation-duration: 18s; font-size: 20px; }
 .h10 { left: 75%; animation-delay: 12s; animation-duration: 15s; font-size: 25px; }
+.h11 { left: 10%; animation-delay: 3s; animation-duration: 15s; font-size: 22px; }
+.h12 { left: 20%; animation-delay: 6s; animation-duration: 13s; font-size: 20px; }
+.h13 { left: 35%; animation-delay: 4s; animation-duration: 16s; font-size: 26px; }
+.h14 { left: 50%; animation-delay: 9s; animation-duration: 14s; font-size: 28px; }
+.h15 { left: 63%; animation-delay: 2s; animation-duration: 17s; font-size: 18px; }
+.h16 { left: 72%; animation-delay: 11s; animation-duration: 12s; font-size: 24px; }
+.h17 { left: 85%; animation-delay: 5s; animation-duration: 15s; font-size: 20px; }
+.h18 { left: 95%; animation-delay: 13s; animation-duration: 14s; font-size: 22px; }
+.h19 { left: 30%; animation-delay: 8s; animation-duration: 16s; font-size: 25px; }
+.h20 { left: 68%; animation-delay: 1s; animation-duration: 13s; font-size: 23px; }
 
 /* Custom watermark accent for Rojbin */
 .rojbin-theme .video-watermark {
@@ -1331,4 +1345,27 @@
   border-radius: 20px !important;
   font-weight: 700 !important;
   box-shadow: 0 0 10px rgba(244, 63, 94, 0.6) !important;
+}
+
+/* Dynamic Click Heart Burst Overlay */
+.click-heart {
+  position: fixed;
+  font-size: 28px;
+  pointer-events: none;
+  z-index: 999999;
+  animation: burstHeart 1s forwards cubic-bezier(0.18, 0.89, 0.32, 1.28);
+  transform: translate(-50%, -50%);
+}
+
+@keyframes burstHeart {
+  0% {
+    transform: translate(-50%, -50%) scale(0.3) translateY(0) rotate(0deg);
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    transform: translate(-50%, -50%) scale(1.6) translateY(-100px) rotate(35deg);
+    opacity: 0;
+    filter: blur(0.5px);
+  }
 }
