@@ -68,6 +68,55 @@ function App() {
     return () => window.removeEventListener("click", handleGlobalClick);
   }, [isRojbin]);
 
+  // Dynamic Romantic Music Player for Rojbin
+  const [isMuted, setIsMuted] = useState(false);
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    if (!isRojbin) {
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      return;
+    }
+
+    const audio = new Audio("https://assets.mixkit.co/music/preview/mixkit-beautiful-dream-493.mp3");
+    audio.loop = true;
+    audio.volume = 0.3; // Low soft background volume
+    audioRef.current = audio;
+
+    const playAudio = () => {
+      audio.play().then(() => {
+        console.log("Romantic music started playing successfully!");
+        window.removeEventListener("click", playAudio);
+      }).catch((err) => {
+        console.log("Browser blocked autoplay, waiting for first click to play.");
+      });
+    };
+
+    playAudio();
+    window.addEventListener("click", playAudio);
+
+    return () => {
+      audio.pause();
+      window.removeEventListener("click", playAudio);
+    };
+  }, [isRojbin]);
+
+  const toggleMusic = () => {
+    if (!audioRef.current) return;
+    if (isMuted) {
+      audioRef.current.play().then(() => {
+        setIsMuted(false);
+        showToast("Müzik Açıldı", "Aşk melodisi arka planda çalıyor. 🌸", "success");
+      });
+    } else {
+      audioRef.current.pause();
+      setIsMuted(true);
+      showToast("Müzik Duraklatıldı", "Aşk melodisi sessize alındı. 🔇", "info");
+    }
+  };
+
   const [editingVideoIndex, setEditingVideoIndex] = useState(null);
   const [newVideoTitle, setNewVideoTitle] = useState("");
 
@@ -1129,6 +1178,25 @@ function App() {
               )}
             </main>
           </div>
+          {isRojbin && (
+            <button 
+              className={`music-controller-btn glass ${isMuted ? "muted" : "playing"}`} 
+              onClick={toggleMusic}
+              title={isMuted ? "Müziği Başlat 🎵" : "Müziği Durdur 🔇"}
+            >
+              <span className="music-icon">
+                {isMuted ? "🔇" : "🎵"}
+              </span>
+              {!isMuted && (
+                <div className="music-waves">
+                  <span className="wave w1"></span>
+                  <span className="wave w2"></span>
+                  <span className="wave w3"></span>
+                </div>
+              )}
+              <span className="music-label">{isMuted ? "Müzik Kapalı" : "Aşk Melodisi"}</span>
+            </button>
+          )}
         </div>
       )}
     </>
