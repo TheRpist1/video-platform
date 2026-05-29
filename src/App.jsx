@@ -13,7 +13,8 @@ import {
   setDoc,
   updateDoc,
   increment,
-  deleteDoc
+  deleteDoc,
+  onSnapshot
 } from "firebase/firestore";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import { app, db } from "./firebase";
@@ -138,6 +139,9 @@ function App() {
   const [localSiteTime, setLocalSiteTime] = useState(0);
   const [localWatchTime, setLocalWatchTime] = useState(0);
 
+  // Real-time active users monitoring (Admin only)
+  const [liveUsers, setLiveUsers] = useState([]);
+
   const unsyncedSiteTimeRef = useRef(0);
   const unsyncedWatchTimeRef = useRef(0);
 
@@ -223,37 +227,104 @@ function App() {
     return () => clearInterval(interval);
   }, [user, activeFolderId, activeSection]);
 
-  // 3. Periodic Firestore batch updates synchronization (every 30 seconds)
+  // 3. Periodic Firestore batch updates synchronization (every 30 seconds) + Active Heartbeat
   useEffect(() => {
     if (!user) return;
+
+    // Send an immediate heartbeat on mount/login
+    const sendImmediateHeartbeat = async () => {
+      try {
+        const userRef = doc(db, "users", user.uid);
+        await setDoc(userRef, {
+          email: user.email,
+          lastActive: Date.now()
+        }, { merge: true });
+      } catch (err) {
+        console.error("Initial heartbeat error:", err);
+      }
+    };
+    sendImmediateHeartbeat();
 
     const syncInterval = setInterval(async () => {
       const siteSecs = unsyncedSiteTimeRef.current;
       const watchSecs = unsyncedWatchTimeRef.current;
 
-      if (siteSecs > 0 || watchSecs > 0) {
-        try {
-          const userRef = doc(db, "users", user.uid);
-          await updateDoc(userRef, {
-            timeOnSite: increment(siteSecs),
-            watchTime: increment(watchSecs),
-            email: user.email // Make sure email is saved for leaderboard
-          });
+      try {
+        const userRef = doc(db, "users", user.uid);
+        const updates = {
+          email: user.email,
+          lastActive: Date.now() // Heartbeat timestamp
+        };
 
-          // Reset unsynced counts by subtracting successfully synced values
-          unsyncedSiteTimeRef.current -= siteSecs;
-          unsyncedWatchTimeRef.current -= watchSecs;
-          console.log(`Successfully synced stats: +${siteSecs}s site, +${watchSecs}s watch time.`);
-        } catch (err) {
-          console.error("Stats sync error:", err);
+        if (siteSecs > 0) {
+          updates.timeOnSite = increment(siteSecs);
         }
+        if (watchSecs > 0) {
+          updates.watchTime = increment(watchSecs);
+        }
+
+        await setDoc(userRef, updates, { merge: true });
+
+        // Reset unsynced counts by subtracting successfully synced values
+        unsyncedSiteTimeRef.current -= siteSecs;
+        unsyncedWatchTimeRef.current -= watchSecs;
+        console.log(`Successfully synced stats & heartbeat: +${siteSecs}s site, +${watchSecs}s watch.`);
+      } catch (err) {
+        console.error("Stats sync error:", err);
       }
     }, 30000);
 
     return () => clearInterval(syncInterval);
   }, [user]);
 
-  // 4. Empty placeholder (leaderboard removed)
+  // Real-time listener for user activity monitoring (Admin only)
+  useEffect(() => {
+    if (!isAdmin) return;
+
+    const unsubscribe = onSnapshot(collection(db, "users"), (snapshot) => {
+      const usersList = [];
+      snapshot.forEach((docItem) => {
+        const data = docItem.data();
+        if (data.email) {
+          usersList.push({
+            id: docItem.id,
+            email: data.email,
+            lastActive: data.lastActive || 0,
+            timeOnSite: data.timeOnSite || 0,
+            watchTime: data.watchTime || 0
+          });
+        }
+      });
+      // Sort: Online users first, then by last active timestamp descending
+      const sorted = usersList.sort((a, b) => {
+        const aOnline = Date.now() - a.lastActive < 120000;
+        const bOnline = Date.now() - b.lastActive < 120000;
+        if (aOnline && !bOnline) return -1;
+        if (!aOnline && bOnline) return 1;
+        return b.lastActive - a.lastActive;
+      });
+      setLiveUsers(sorted);
+    });
+
+    return () => unsubscribe();
+  }, [isAdmin]);
+
+  const getActiveStatusText = (lastActiveTimestamp) => {
+    if (!lastActiveTimestamp) return "Çevrimdışı ⚪";
+    const diffMs = Date.now() - lastActiveTimestamp;
+    if (diffMs < 120000) {
+      return "Çevrimiçi 🟢";
+    }
+    const diffMins = Math.floor(diffMs / 60000);
+    if (diffMins < 60) {
+      return `${diffMins} dk önce aktifti`;
+    }
+    const diffHours = Math.floor(diffMins / 60);
+    if (diffHours < 24) {
+      return `${diffHours} sa önce aktifti`;
+    }
+    return new Date(lastActiveTimestamp).toLocaleDateString("tr-TR");
+  };
 
   // 5. Dynamic time formatting helper (formats seconds to hh:mm:ss premium display)
   const formatDuration = (totalSeconds) => {
@@ -1364,8 +1435,98 @@ function App() {
 
                     </div>
 
-                  </div>
-                </div>
+                    {/* FULL-WIDTH CARD: Canlı Öğrenci Takip Paneli */}
+                    <div className="leaderboard-board glass" style={{ padding: "32px", border: "1px solid rgba(16, 185, 129, 0.2)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                        <div>
+                          <h2 className="section-title" style={{ fontSize: "20px", display: "flex", alignItems: "center", gap: "10px", color: "var(--text-primary)" }}>
+                            👥 Canlı Öğrenci Takip Paneli 
+                            <span style={{ display: "inline-flex", width: "10px", height: "10px", background: "#10b981", borderRadius: "50%", boxShadow: "0 0 10px #10b981", animation: "pulseGlow 2s infinite" }}></span>
+                          </h2>
+                          <p className="section-subtitle" style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
+                            Sitedeki tüm kayıtlı öğrencilerin o andaki aktiflik durumları ve çalışma istatistikleri (Anlık Güncellenir).
+                          </p>
+                        </div>
+                        <span className="folder-count-badge" style={{ background: "rgba(16, 185, 129, 0.12)", color: "#10b981", fontWeight: "700", padding: "6px 12px", fontSize: "12px" }}>
+                          {liveUsers.filter(u => Date.now() - u.lastActive < 120000).length} Çevrimiçi Öğrenci
+                        </span>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "20px", marginTop: "16px" }}>
+                        {liveUsers.length > 0 ? (
+                          liveUsers.map((u) => {
+                            const isOnline = Date.now() - u.lastActive < 120000;
+                            return (
+                              <div 
+                                key={u.id} 
+                                className="glass" 
+                                style={{ 
+                                  padding: "20px", 
+                                  borderRadius: "12px", 
+                                  border: isOnline ? "1px solid rgba(16, 185, 129, 0.3)" : "1px solid rgba(255,255,255,0.05)",
+                                  background: isOnline ? "rgba(16, 185, 129, 0.03)" : "var(--bg-card)",
+                                  position: "relative",
+                                  overflow: "hidden",
+                                  transition: "all 0.3s ease"
+                                }}
+                              >
+                                {isOnline && (
+                                  <div style={{ position: "absolute", top: 0, left: 0, height: "4px", width: "100%", background: "linear-gradient(90deg, #10b981, #34d399)" }}></div>
+                                )}
+                                
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+                                  <span style={{ 
+                                    fontSize: "24px", 
+                                    background: isOnline ? "rgba(16, 185, 129, 0.15)" : "rgba(255,255,255,0.05)",
+                                    borderRadius: "50%",
+                                    width: "44px",
+                                    height: "44px",
+                                    display: "flex",
+                                    alignItems: "center",
+                                    justifyContent: "center"
+                                  }}>
+                                    🎓
+                                  </span>
+                                  <span style={{ 
+                                    fontSize: "11px", 
+                                    fontWeight: "700", 
+                                    padding: "4px 8px", 
+                                    borderRadius: "20px", 
+                                    background: isOnline ? "rgba(16, 185, 129, 0.15)" : "rgba(255,255,255,0.05)",
+                                    color: isOnline ? "#34d399" : "var(--text-muted)"
+                                  }}>
+                                    {getActiveStatusText(u.lastActive)}
+                                  </span>
+                                </div>
+
+                                <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", wordBreak: "break-all", marginBottom: "14px" }}>
+                                  {u.email}
+                                </div>
+
+                                <div style={{ display: "flex", flexDirection: "column", gap: "6px", borderTop: "1px solid rgba(255,255,255,0.04)", paddingTop: "12px" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                                    <span style={{ color: "var(--text-muted)" }}>⏱ Sitede Geçen Süre</span>
+                                    <span style={{ fontWeight: "600", color: "var(--text-primary)" }}>{formatDuration(u.timeOnSite)}</span>
+                                  </div>
+                                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px" }}>
+                                    <span style={{ color: "var(--text-muted)" }}>🎬 İzleme Süresi</span>
+                                    <span style={{ fontWeight: "600", color: "var(--accent-purple)" }}>{formatDuration(u.watchTime)}</span>
+                                  </div>
+                                </div>
+
+                              </div>
+                            );
+                          })
+                        ) : (
+                          <div style={{ color: "var(--text-muted)", fontSize: "13px", gridColumn: "1 / -1", textAlign: "center", padding: "30px" }}>
+                            Kullanıcı verisi henüz yüklenemedi.
+                          </div>
+                        )}
+                      </div>
+                    </div>
+ 
+                   </div>
+                 </div>
               ) : !activeFolder ? (
                 /* Welcome Screen */
                 <div className="welcome-screen" style={isRojbin ? { animation: "fadeIn 0.5s ease-out", border: "1px dashed rgba(244, 63, 94, 0.3)", background: "rgba(244, 63, 94, 0.05)" } : {}}>
