@@ -139,12 +139,10 @@ function App() {
   const [isAddingFolder, setIsAddingFolder] = useState(false);
   const [isAddingSubfolder, setIsAddingSubfolder] = useState(false);
 
-  // Statistics and Leaderboard States
-  const [activeSection, setActiveSection] = useState("folders"); // "folders" or "leaderboard"
+  // Statistics and Active Session States
+  const [activeSection, setActiveSection] = useState("folders"); // "folders" or "admin"
   const [localSiteTime, setLocalSiteTime] = useState(0);
   const [localWatchTime, setLocalWatchTime] = useState(0);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
 
   const unsyncedSiteTimeRef = useRef(0);
   const unsyncedWatchTimeRef = useRef(0);
@@ -261,39 +259,7 @@ function App() {
     return () => clearInterval(syncInterval);
   }, [user]);
 
-  // 4. Fetch global user leaderboard from Firestore
-  const fetchLeaderboard = async () => {
-    setIsLeaderboardLoading(true);
-    try {
-      const querySnapshot = await getDocs(collection(db, "users"));
-      const usersList = [];
-      querySnapshot.forEach((docItem) => {
-        const data = docItem.data();
-        if (data.email) {
-          usersList.push({
-            id: docItem.id,
-            email: data.email,
-            timeOnSite: data.timeOnSite || 0,
-            watchTime: data.watchTime || 0
-          });
-        }
-      });
-
-      // Sort users by active watchTime descending
-      const sorted = usersList.sort((a, b) => b.watchTime - a.watchTime);
-      setLeaderboard(sorted);
-    } catch (err) {
-      showToast("Hata", "Lider tablosu yüklenemedi.", "error");
-    } finally {
-      setIsLeaderboardLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    if (activeSection === "leaderboard") {
-      fetchLeaderboard();
-    }
-  }, [activeSection]);
+  // 4. Empty placeholder (leaderboard removed)
 
   // 5. Dynamic time formatting helper (formats seconds to hh:mm:ss premium display)
   const formatDuration = (totalSeconds) => {
@@ -1059,31 +1025,20 @@ function App() {
             {/* Left Sidebar */}
             <aside className="dashboard-sidebar">
               
-              {/* Sidebar Tabs */}
-              <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "16px" }}>
-                <button 
-                  className={`folder-item ${activeSection === "folders" ? "active" : ""}`}
-                  onClick={() => setActiveSection("folders")}
-                  style={{ fontWeight: "600", fontSize: "14px" }}
-                >
-                  <div className="folder-item-left">
-                    <span className="folder-item-icon">📺</span>
-                    <span>Eğitim İçerikleri</span>
-                  </div>
-                </button>
-                
-                <button 
-                  className={`folder-item ${activeSection === "leaderboard" ? "active" : ""}`}
-                  onClick={() => setActiveSection("leaderboard")}
-                  style={{ fontWeight: "600", fontSize: "14px" }}
-                >
-                  <div className="folder-item-left">
-                    <span className="folder-item-icon">🏆</span>
-                    <span>Liderlik Tablosu</span>
-                  </div>
-                </button>
-
-                {isAdmin && (
+              {/* Sidebar Tabs - Only if Admin */}
+              {isAdmin && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px", marginBottom: "16px" }}>
+                  <button 
+                    className={`folder-item ${activeSection === "folders" ? "active" : ""}`}
+                    onClick={() => setActiveSection("folders")}
+                    style={{ fontWeight: "600", fontSize: "14px" }}
+                  >
+                    <div className="folder-item-left">
+                      <span className="folder-item-icon">📺</span>
+                      <span>Eğitim İçerikleri</span>
+                    </div>
+                  </button>
+                  
                   <button 
                     className={`folder-item ${activeSection === "admin" ? "active" : ""}`}
                     onClick={() => setActiveSection("admin")}
@@ -1094,8 +1049,8 @@ function App() {
                       <span>Yönetici Paneli</span>
                     </div>
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
               {activeSection === "folders" ? (
                 <>
@@ -1163,21 +1118,29 @@ function App() {
                   </div>
                 </>
               ) : (
-                /* Live Sidebar Stats Info for Leaderboard tab */
+                /* Sidebar Admin Info */
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px", marginTop: "12px", animation: "fadeIn 0.3s" }}>
-                  <div className="sidebar-title">Aktif Süreniz</div>
-                  
-                  <div className="glass" style={{ padding: "16px", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                    <div style={{ fontSize: "12px", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: "700" }}>⏱ Sitede Kalma</div>
-                    <div style={{ fontSize: "18px", fontWeight: "700", color: "var(--text-primary)" }}>{formatDuration(localSiteTime)}</div>
-                  </div>
-
-                  <div className="glass" style={{ padding: "16px", borderRadius: "12px", display: "flex", flexDirection: "column", gap: "10px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                    <div style={{ fontSize: "12px", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: "700" }}>🎬 İzleme Süresi</div>
-                    <div style={{ fontSize: "18px", fontWeight: "700", color: "var(--accent-purple)", textShadow: "0 0 10px rgba(139,92,246,0.2)" }}>{formatDuration(localWatchTime)}</div>
+                  <div className="sidebar-title">Yönetici Paneli</div>
+                  <div className="glass" style={{ padding: "16px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.05)", fontSize: "13px", color: "var(--text-muted)", lineHeight: "1.5" }}>
+                    TusKıran içerik ve klasör yapısını bu panelden dinamik olarak yönetebilirsiniz.
                   </div>
                 </div>
               )}
+
+              {/* Active Time Statistics (Always visible for students!) */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px", marginTop: "auto", borderTop: "1px solid var(--border-subtle)", paddingTop: "16px" }}>
+                <div className="sidebar-title" style={{ paddingLeft: "4px", marginBottom: "4px" }}>Aktif Süreniz</div>
+                
+                <div className="glass" style={{ padding: "10px 14px", borderRadius: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid rgba(255,255,255,0.03)" }}>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>⏱ Sitede Kalma</div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--text-primary)" }}>{formatDuration(localSiteTime)}</div>
+                </div>
+
+                <div className="glass" style={{ padding: "10px 14px", borderRadius: "10px", display: "flex", justifyContent: "space-between", alignItems: "center", border: "1px solid rgba(255,255,255,0.03)" }}>
+                  <div style={{ fontSize: "11px", color: "var(--text-muted)", fontWeight: "600" }}>🎬 İzleme Süresi</div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--accent-purple)" }}>{formatDuration(localWatchTime)}</div>
+                </div>
+              </div>
             </aside>
 
             {/* Right Content Stream */}
@@ -1408,136 +1371,6 @@ function App() {
                     </div>
 
                   </div>
-                </div>
-              ) : activeSection === "leaderboard" ? (
-                /* --- Leaderboard Pane --- */
-                <div style={{ display: "flex", flexDirection: "column", gap: "24px", animation: "fadeIn 0.4s ease-out" }}>
-                  
-                  {/* Top Stats Cards */}
-                  <div className="stats-grid">
-                    <div className="stat-card glass">
-                      <div className="stat-card-glow" style={{ background: "rgba(139, 92, 246, 0.15)" }}></div>
-                      <div className="stat-card-title">⏱ Sitede Kalma Süreniz</div>
-                      <div className="stat-card-value">{formatDuration(localSiteTime)}</div>
-                      <div className="stat-card-desc">Platformda aktif olarak geçirdiğiniz toplam süre.</div>
-                    </div>
-
-                    <div className="stat-card glass">
-                      <div className="stat-card-glow" style={{ background: "rgba(59, 130, 246, 0.15)" }}></div>
-                      <div className="stat-card-title">🎬 Aktif İzleme Süreniz</div>
-                      <div className="stat-card-value" style={{ color: "var(--accent-purple)" }}>{formatDuration(localWatchTime)}</div>
-                      <div className="stat-card-desc">Ders ve eğitim videolarını izlediğiniz toplam süre.</div>
-                    </div>
-                  </div>
-
-                  {/* Leaderboard Table Container */}
-                  <div className="leaderboard-board glass">
-                    <div className="leaderboard-title-row">
-                      <div>
-                        <h2 className="section-title" style={{ fontSize: "20px", marginBottom: "4px" }}>
-                          🏆 TusKıran Derece Sıralaması
-                        </h2>
-                        <p className="section-subtitle" style={{ fontSize: "13px" }}>
-                          En çok aktif izleme süresine sahip öğrenciler listeleniyor.
-                        </p>
-                      </div>
-                      
-                      <button 
-                        className="btn-refresh" 
-                        onClick={fetchLeaderboard}
-                        disabled={isLeaderboardLoading}
-                      >
-                        {isLeaderboardLoading ? (
-                          <>
-                            <span className="login-button-spinner" style={{ width: "12px", height: "12px", border: "2px solid rgba(255,255,255,0.3)", borderTopColor: "white", margin: "0" }}></span>
-                            Yükleniyor...
-                          </>
-                        ) : (
-                          <>
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                              <polyline points="23 4 23 10 17 10"></polyline>
-                              <polyline points="1 20 1 14 7 14"></polyline>
-                              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
-                            </svg>
-                            Yenile
-                          </>
-                        )}
-                      </button>
-                    </div>
-
-                    <div className="leaderboard-table-container">
-                      <table className="leaderboard-table">
-                        <thead>
-                          <tr>
-                            <th className="leaderboard-th" style={{ width: "80px", textAlign: "center" }}>Derece</th>
-                            <th className="leaderboard-th">Kullanıcı</th>
-                            <th className="leaderboard-th">🎬 Aktif İzleme Süresi</th>
-                            <th className="leaderboard-th">⏱ Sitede Kalma Süresi</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {leaderboard.length > 0 ? (
-                            leaderboard.map((u, i) => {
-                              const rank = i + 1;
-                              let rankClass = "";
-                              let trClass = "";
-                              let rankIcon = rank;
-
-                              if (rank === 1) {
-                                rankClass = "rank-1";
-                                trClass = "tr-rank-1";
-                                rankIcon = "🥇";
-                              } else if (rank === 2) {
-                                rankClass = "rank-2";
-                                trClass = "tr-rank-2";
-                                rankIcon = "🥈";
-                              } else if (rank === 3) {
-                                rankClass = "rank-3";
-                                trClass = "tr-rank-3";
-                                rankIcon = "🥉";
-                              }
-
-                              const maskEmail = (emailStr) => {
-                                if (!emailStr) return "";
-                                const [username, domain] = emailStr.split("@");
-                                if (!domain) return emailStr;
-                                if (username.length <= 2) return `**@${domain}`;
-                                return `${username.slice(0, 2)}***@${domain}`;
-                              };
-
-                              const isCurrentUser = user && user.email && u.email.toLowerCase() === user.email.toLowerCase();
-
-                              return (
-                                <tr key={u.id} className={`leaderboard-tr ${trClass}`} style={isCurrentUser ? { background: "rgba(139, 92, 246, 0.08)", borderLeft: "3px solid var(--accent-purple)" } : {}}>
-                                  <td className="leaderboard-td" style={{ textAlign: "center" }}>
-                                    <span className={`leaderboard-rank ${rankClass}`}>
-                                      {rankIcon}
-                                    </span>
-                                  </td>
-                                  <td className="leaderboard-td leaderboard-td-user" style={{ fontWeight: isCurrentUser ? "700" : "inherit" }}>
-                                    {isCurrentUser ? `${u.email} (Siz)` : maskEmail(u.email)}
-                                  </td>
-                                  <td className="leaderboard-td" style={{ fontWeight: "600", color: rank <= 3 ? "inherit" : "var(--text-primary)" }}>
-                                    {formatDuration(u.watchTime)}
-                                  </td>
-                                  <td className="leaderboard-td">
-                                    {formatDuration(u.timeOnSite)}
-                                  </td>
-                                </tr>
-                              );
-                            })
-                          ) : (
-                            <tr>
-                              <td colSpan="4" className="leaderboard-td" style={{ textAlign: "center", padding: "40px" }}>
-                                {isLeaderboardLoading ? "Kullanıcı verileri yükleniyor..." : "Sıralama verisi bulunamadı."}
-                              </td>
-                            </tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
                 </div>
               ) : !activeFolder ? (
                 /* Welcome Screen */
