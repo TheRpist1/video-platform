@@ -35,14 +35,8 @@ function App() {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [toasts, setToasts] = useState([]);
 
-  // Admin configurations
-  const ADMIN_EMAILS = ["admin@tuskiran.com", "bilge@tuskiran.com", "bilgeerngurbuz@gmail.com", "admin@gmail.com"];
-  const isAdmin = user && user.email && (
-    ADMIN_EMAILS.includes(user.email.toLowerCase()) || 
-    user.email.toLowerCase().includes("admin") || 
-    user.email.toLowerCase().includes("bilge") ||
-    user.email.toLowerCase().includes("gurbuz")
-  );
+  // Admin configurations (Only bilgeeren7@gmail.com is authorized as Admin)
+  const isAdmin = user && user.email && user.email.toLowerCase() === "bilgeeren7@gmail.com";
 
   const isRojbin = user && user.email && user.email.toLowerCase() === "rojbin@bilge.com";
 
