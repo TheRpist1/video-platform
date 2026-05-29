@@ -124,6 +124,13 @@ function App() {
   const [editingVideoIndex, setEditingVideoIndex] = useState(null);
   const [newVideoTitle, setNewVideoTitle] = useState("");
 
+  // Admin panel state variables
+  const [adminTitle, setAdminTitle] = useState("");
+  const [adminUrl, setAdminUrl] = useState("");
+  const [adminFolderId, setAdminFolderId] = useState("");
+  const [adminSubfolderId, setAdminSubfolderId] = useState("");
+  const [isAddingVideo, setIsAddingVideo] = useState(false);
+
   // Statistics and Leaderboard States
   const [activeSection, setActiveSection] = useState("folders"); // "folders" or "leaderboard"
   const [localSiteTime, setLocalSiteTime] = useState(0);
@@ -526,6 +533,153 @@ function App() {
     }
   };
 
+  const handleAdminAddVideo = async (e) => {
+    if (e) e.preventDefault();
+    if (!adminTitle.trim() || !adminUrl.trim() || !adminFolderId) {
+      showToast("Eksik Bilgi", "Lütfen tüm gerekli alanları doldurun.", "error");
+      return;
+    }
+
+    setIsAddingVideo(true);
+    try {
+      // Sanitize/Convert Bunny URL
+      let formattedUrl = adminUrl.trim();
+      if (formattedUrl.includes("player.mediadelivery.net/play/") || formattedUrl.includes("mediadelivery.net/play/")) {
+        formattedUrl = formattedUrl.replace("player.mediadelivery.net/play/", "iframe.mediadelivery.net/embed/");
+        formattedUrl = formattedUrl.replace("mediadelivery.net/play/", "iframe.mediadelivery.net/embed/");
+        if (!formattedUrl.includes("?")) {
+          formattedUrl += "?autoplay=false";
+        }
+      }
+
+      const newVideoObj = {
+        title: adminTitle.trim(),
+        url: formattedUrl
+      };
+
+      const folderDocRef = doc(db, "folders", adminFolderId);
+      const folderDocSnap = await getDoc(folderDocRef);
+
+      if (!folderDocSnap.exists()) {
+        showToast("Hata", "Seçilen klasör veritabanında bulunamadı.", "error");
+        setIsAddingVideo(false);
+        return;
+      }
+
+      const folderData = folderDocSnap.data();
+      let updatedVideos;
+      let updatedSubfolders;
+
+      if (adminSubfolderId) {
+        // Adding video to a subfolder
+        const subfolders = folderData.subfolders || [];
+        updatedSubfolders = subfolders.map(sf => {
+          if (sf.id === adminSubfolderId) {
+            const currentVideos = Array.isArray(sf.videos) ? sf.videos : [];
+            return { ...sf, videos: [...currentVideos, newVideoObj] };
+          }
+          return sf;
+        });
+
+        await updateDoc(folderDocRef, { subfolders: updatedSubfolders });
+
+        // Update local React state
+        setFolders(prev =>
+          prev.map(f => f.id === adminFolderId ? { ...f, subfolders: updatedSubfolders } : f)
+        );
+      } else {
+        // Adding video directly to a flat folder
+        const currentVideos = Array.isArray(folderData.videos) ? folderData.videos : [];
+        updatedVideos = [...currentVideos, newVideoObj];
+
+        await updateDoc(folderDocRef, { videos: updatedVideos });
+
+        // Update local React state
+        setFolders(prev =>
+          prev.map(f => f.id === adminFolderId ? { ...f, videos: updatedVideos } : f)
+        );
+      }
+
+      showToast("Video Eklendi", `"${adminTitle}" başarıyla eklendi! 🚀`, "success");
+      
+      // Reset form fields
+      setAdminTitle("");
+      setAdminUrl("");
+      setAdminSubfolderId("");
+      
+      // Navigate to the newly updated folder automatically so they can see it!
+      setActiveFolderId(adminFolderId);
+      if (adminSubfolderId) {
+        setActiveSubfolderId(adminSubfolderId);
+        setExpandedFolderIds(prev => ({ ...prev, [adminFolderId]: true }));
+      } else {
+        setActiveSubfolderId(null);
+      }
+      setActiveSection("folders");
+
+    } catch (err) {
+      console.error(err);
+      showToast("Hata", "Video eklenirken bir hata oluştu.", "error");
+    } finally {
+      setIsAddingVideo(false);
+    }
+  };
+
+  const handleDeleteVideo = async (videoIndex) => {
+    if (!isAdmin) return;
+    
+    const videosToRender = activeSubfolder ? activeSubfolder.videos : activeFolder.videos;
+    const videoItem = videosToRender[videoIndex];
+    const isObject = typeof videoItem === "object" && videoItem !== null;
+    const videoTitle = isObject ? (videoItem.title || videoItem.name || `Video #${videoIndex + 1}`) : `Video #${videoIndex + 1}`;
+
+    const confirmDelete = window.confirm(`"${videoTitle}" isimli videoyu silmek istediğinizden emin misiniz?`);
+    if (!confirmDelete) return;
+
+    try {
+      let updatedVideos;
+      let updatedSubfolders;
+
+      if (activeSubfolder) {
+        // Delete video item inside subfolder
+        updatedVideos = activeSubfolder.videos.filter((_, idx) => idx !== videoIndex);
+
+        updatedSubfolders = activeFolder.subfolders.map(sf => {
+          if (sf.id === activeSubfolder.id) {
+            return { ...sf, videos: updatedVideos };
+          }
+          return sf;
+        });
+
+        // Update Firestore doc
+        const folderRef = doc(db, "folders", activeFolder.id);
+        await updateDoc(folderRef, { subfolders: updatedSubfolders });
+
+        // Update local state
+        setFolders(prev => 
+          prev.map(f => f.id === activeFolder.id ? { ...f, subfolders: updatedSubfolders } : f)
+        );
+      } else {
+        // Delete video item in flat folder
+        updatedVideos = activeFolder.videos.filter((_, idx) => idx !== videoIndex);
+
+        // Update Firestore doc
+        const folderRef = doc(db, "folders", activeFolder.id);
+        await updateDoc(folderRef, { videos: updatedVideos });
+
+        // Update local state
+        setFolders(prev => 
+          prev.map(f => f.id === activeFolder.id ? { ...f, videos: updatedVideos } : f)
+        );
+      }
+
+      showToast("Video Silindi", `"${videoTitle}" başarıyla silindi.`, "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Hata", "Video silinirken bir hata oluştu.", "error");
+    }
+  };
+
   const getActiveFolder = () => {
     return folders.find((f) => f.id === activeFolderId) || null;
   };
@@ -538,6 +692,8 @@ function App() {
   };
 
   const activeSubfolder = getActiveSubfolder();
+
+  const selectedAdminFolder = folders.find(f => f.id === adminFolderId) || null;
 
   return (
     <>
@@ -751,6 +907,19 @@ function App() {
                     <span>Liderlik Tablosu</span>
                   </div>
                 </button>
+
+                {isAdmin && (
+                  <button 
+                    className={`folder-item ${activeSection === "admin" ? "active" : ""}`}
+                    onClick={() => setActiveSection("admin")}
+                    style={{ fontWeight: "600", fontSize: "14px", border: "1px dashed rgba(139, 92, 246, 0.4)", marginTop: "6px" }}
+                  >
+                    <div className="folder-item-left">
+                      <span className="folder-item-icon">⚙️</span>
+                      <span>Yönetici Paneli</span>
+                    </div>
+                  </button>
+                )}
               </div>
 
               {activeSection === "folders" ? (
@@ -838,7 +1007,103 @@ function App() {
 
             {/* Right Content Stream */}
             <main className="dashboard-main-area">
-              {activeSection === "leaderboard" ? (
+              {activeSection === "admin" && isAdmin ? (
+                /* --- Admin Panel Pane --- */
+                <div style={{ display: "flex", flexDirection: "column", gap: "24px", animation: "fadeIn 0.4s ease-out" }}>
+                  <div className="leaderboard-board glass" style={{ padding: "32px", border: "1px solid rgba(139, 92, 246, 0.2)" }}>
+                    <h2 className="section-title" style={{ fontSize: "22px", marginBottom: "6px", color: "var(--text-primary)" }}>
+                      ⚙️ TusKıran Yönetici Paneli
+                    </h2>
+                    <p className="section-subtitle" style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "28px" }}>
+                      Sitenize kolayca yeni videolar ekleyin. Bunny.net normal izleme linklerini sistem otomatik olarak güvenli embed formatına dönüştürecektir.
+                    </p>
+
+                    <form onSubmit={handleAdminAddVideo} style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "600px" }}>
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "8px", color: "var(--text-secondary)" }}>Video Başlığı</label>
+                        <div className="input-container">
+                          <input
+                            type="text"
+                            placeholder="Örn: 03 Genel Farmakoloji Dağılım"
+                            className="input-field"
+                            style={{ paddingLeft: "16px" }}
+                            value={adminTitle}
+                            onChange={(e) => setAdminTitle(e.target.value)}
+                            required
+                          />
+                        </div>
+                      </div>
+
+                      <div className="form-group" style={{ marginBottom: 0 }}>
+                        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "8px", color: "var(--text-secondary)" }}>Video Linki (Bunny.net veya Cloudflare)</label>
+                        <div className="input-container">
+                          <input
+                            type="text"
+                            placeholder="Örn: https://player.mediadelivery.net/play/..."
+                            className="input-field"
+                            style={{ paddingLeft: "16px" }}
+                            value={adminUrl}
+                            onChange={(e) => setAdminUrl(e.target.value)}
+                            required
+                          />
+                        </div>
+                        <span style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", display: "block" }}>
+                          Bunny'den kopyaladığınız normal izleme veya embed linkini doğrudan yapıştırabilirsiniz.
+                        </span>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "8px", color: "var(--text-secondary)" }}>Klasör Seçimi</label>
+                          <select 
+                            className="input-field" 
+                            style={{ paddingLeft: "12px", background: "rgba(8, 9, 13, 0.8)", cursor: "pointer", color: "var(--text-primary)" }}
+                            value={adminFolderId}
+                            onChange={(e) => { setAdminFolderId(e.target.value); setAdminSubfolderId(""); }}
+                            required
+                          >
+                            <option value="">Klasör Seçin...</option>
+                            {folders.map(f => (
+                              <option key={f.id} value={f.id} style={{ background: "#0c0d12", color: "var(--text-primary)" }}>{getFolderName(f)}</option>
+                            ))}
+                          </select>
+                        </div>
+
+                        {selectedAdminFolder && Array.isArray(selectedAdminFolder.subfolders) && selectedAdminFolder.subfolders.length > 0 && (
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "8px", color: "var(--text-secondary)" }}>Alt Klasör Seçimi</label>
+                            <select 
+                              className="input-field" 
+                              style={{ paddingLeft: "12px", background: "rgba(8, 9, 13, 0.8)", cursor: "pointer", color: "var(--text-primary)" }}
+                              value={adminSubfolderId}
+                              onChange={(e) => setAdminSubfolderId(e.target.value)}
+                              required
+                            >
+                              <option value="">Alt Klasör Seçin...</option>
+                              {selectedAdminFolder.subfolders.filter(sf => sf !== null).map(sf => (
+                                <option key={sf.id} value={sf.id} style={{ background: "#0c0d12", color: "var(--text-primary)" }}>{getSubfolderName(sf)}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="submit"
+                        className={`login-button ${isAddingVideo ? "loading" : ""}`}
+                        style={{ marginTop: "12px", background: "linear-gradient(135deg, var(--accent-purple), #9333ea)" }}
+                        disabled={isAddingVideo}
+                      >
+                        {isAddingVideo ? (
+                          <span className="login-button-spinner"></span>
+                        ) : (
+                          "Videoyu Başarıyla Ekle 🚀"
+                        )}
+                      </button>
+                    </form>
+                  </div>
+                </div>
+              ) : activeSection === "leaderboard" ? (
                 /* --- Leaderboard Pane --- */
                 <div style={{ display: "flex", flexDirection: "column", gap: "24px", animation: "fadeIn 0.4s ease-out" }}>
                   
@@ -1157,6 +1422,19 @@ function App() {
                                         </div>
                                       </div>
                                       <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                                        {isAdmin && (
+                                          <button 
+                                            className="btn-signout" 
+                                            style={{ padding: "6px 12px", border: "1px solid rgba(239, 68, 68, 0.4)", borderRadius: "8px", cursor: "pointer", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", fontSize: "12px", fontWeight: "600", display: "inline-flex", alignItems: "center", gap: "6px", height: "30px" }}
+                                            onClick={() => handleDeleteVideo(index)}
+                                          >
+                                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                              <polyline points="3 6 5 6 21 6"></polyline>
+                                              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                            </svg>
+                                            Sil
+                                          </button>
+                                        )}
                                         <button className="btn-fullscreen" onClick={() => handleFullscreen(index)}>
                                           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                                             <path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"></path>
