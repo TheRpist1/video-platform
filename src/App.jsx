@@ -12,7 +12,8 @@ import {
   getDoc,
   setDoc,
   updateDoc,
-  increment
+  increment,
+  deleteDoc
 } from "firebase/firestore";
 import FingerprintJS from "@fingerprintjs/fingerprintjs";
 import { app, db } from "./firebase";
@@ -130,6 +131,13 @@ function App() {
   const [adminFolderId, setAdminFolderId] = useState("");
   const [adminSubfolderId, setAdminSubfolderId] = useState("");
   const [isAddingVideo, setIsAddingVideo] = useState(false);
+
+  // Admin folder management states
+  const [newFolderName, setNewFolderName] = useState("");
+  const [newSubfolderName, setNewSubfolderName] = useState("");
+  const [subfolderParentId, setSubfolderParentId] = useState("");
+  const [isAddingFolder, setIsAddingFolder] = useState(false);
+  const [isAddingSubfolder, setIsAddingSubfolder] = useState(false);
 
   // Statistics and Leaderboard States
   const [activeSection, setActiveSection] = useState("folders"); // "folders" or "leaderboard"
@@ -680,6 +688,173 @@ function App() {
     }
   };
 
+  const toSlug = (text) => {
+    if (!text) return "";
+    return text
+      .toString()
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/[ğĞ]/g, 'g')
+      .replace(/[üÜ]/g, 'u')
+      .replace(/[şŞ]/g, 's')
+      .replace(/[ıİ]/g, 'i')
+      .replace(/[öÖ]/g, 'o')
+      .replace(/[çÇ]/g, 'c')
+      .replace(/[^a-z0-9\-]/g, '')
+      .replace(/\-\-+/g, '-');
+  };
+
+  const handleAddFolder = async (e) => {
+    if (e) e.preventDefault();
+    if (!newFolderName.trim()) {
+      showToast("Eksik Bilgi", "Lütfen klasör adını girin.", "error");
+      return;
+    }
+
+    const folderSlug = toSlug(newFolderName);
+    if (!folderSlug) {
+      showToast("Hata", "Geçersiz klasör adı.", "error");
+      return;
+    }
+
+    if (folders.some(f => f.id === folderSlug)) {
+      showToast("Hata", "Bu klasör zaten mevcut.", "error");
+      return;
+    }
+
+    setIsAddingFolder(true);
+    try {
+      const folderDocRef = doc(db, "folders", folderSlug);
+      const newFolderData = {
+        title: newFolderName.trim(),
+        videos: [],
+        subfolders: []
+      };
+
+      await setDoc(folderDocRef, newFolderData);
+
+      setFolders(prev => [...prev, { id: folderSlug, ...newFolderData }]);
+      showToast("Klasör Eklendi", `"${newFolderName}" başarıyla oluşturuldu! 📁`, "success");
+      setNewFolderName("");
+    } catch (err) {
+      console.error(err);
+      showToast("Hata", "Klasör oluşturulurken bir hata oluştu.", "error");
+    } finally {
+      setIsAddingFolder(false);
+    }
+  };
+
+  const handleAddSubfolder = async (e) => {
+    if (e) e.preventDefault();
+    if (!newSubfolderName.trim() || !subfolderParentId) {
+      showToast("Eksik Bilgi", "Lütfen ana klasörü seçin ve alt klasör adını girin.", "error");
+      return;
+    }
+
+    const subfolderSlug = toSlug(newSubfolderName);
+    if (!subfolderSlug) {
+      showToast("Hata", "Geçersiz alt klasör adı.", "error");
+      return;
+    }
+
+    const parentFolder = folders.find(f => f.id === subfolderParentId);
+    if (!parentFolder) {
+      showToast("Hata", "Ana klasör bulunamadı.", "error");
+      return;
+    }
+
+    const existingSubfolders = parentFolder.subfolders || [];
+    if (existingSubfolders.some(sf => sf.id === subfolderSlug)) {
+      showToast("Hata", "Bu alt klasör zaten mevcut.", "error");
+      return;
+    }
+
+    setIsAddingSubfolder(true);
+    try {
+      const folderDocRef = doc(db, "folders", subfolderParentId);
+      const newSubfolderObj = {
+        id: subfolderSlug,
+        title: newSubfolderName.trim(),
+        videos: []
+      };
+
+      const updatedSubfolders = [...existingSubfolders, newSubfolderObj];
+      await updateDoc(folderDocRef, { subfolders: updatedSubfolders });
+
+      setFolders(prev =>
+        prev.map(f => f.id === subfolderParentId ? { ...f, subfolders: updatedSubfolders } : f)
+      );
+
+      showToast("Alt Klasör Eklendi", `"${newSubfolderName}" alt klasörü başarıyla oluşturuldu! ↳ 📁`, "success");
+      setNewSubfolderName("");
+      setSubfolderParentId("");
+    } catch (err) {
+      console.error(err);
+      showToast("Hata", "Alt klasör oluşturulurken bir hata oluştu.", "error");
+    } finally {
+      setIsAddingSubfolder(false);
+    }
+  };
+
+  const handleDeleteFolder = async (folderId) => {
+    if (!isAdmin) return;
+    
+    const targetFolder = folders.find(f => f.id === folderId);
+    const folderName = getFolderName(targetFolder);
+    
+    const confirmDelete = window.confirm(`"${folderName}" klasörünü ve İÇİNDEKİ TÜM ALT KLASÖRLERİ/VİDEOLARI silmek istediğinizden emin misiniz?\nBu işlem geri alınamaz!`);
+    if (!confirmDelete) return;
+
+    try {
+      const folderDocRef = doc(db, "folders", folderId);
+      await deleteDoc(folderDocRef);
+
+      setFolders(prev => prev.filter(f => f.id !== folderId));
+      
+      if (activeFolderId === folderId) {
+        setActiveFolderId(null);
+        setActiveSubfolderId(null);
+      }
+
+      showToast("Klasör Silindi", `"${folderName}" klasörü başarıyla silindi.`, "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Hata", "Klasör silinirken bir hata oluştu.", "error");
+    }
+  };
+
+  const handleDeleteSubfolder = async (parentFolderId, subfolderId) => {
+    if (!isAdmin) return;
+
+    const parentFolder = folders.find(f => f.id === parentFolderId);
+    const subfolder = (parentFolder.subfolders || []).find(sf => sf.id === subfolderId);
+    const subfolderName = getSubfolderName(subfolder);
+
+    const confirmDelete = window.confirm(`"${subfolderName}" alt klasörünü ve İÇİNDEKİ TÜM VİDEOLARI silmek istediğinizden emin misiniz?\nBu işlem geri alınamaz!`);
+    if (!confirmDelete) return;
+
+    try {
+      const folderDocRef = doc(db, "folders", parentFolderId);
+      const updatedSubfolders = (parentFolder.subfolders || []).filter(sf => sf.id !== subfolderId);
+      
+      await updateDoc(folderDocRef, { subfolders: updatedSubfolders });
+
+      setFolders(prev =>
+        prev.map(f => f.id === parentFolderId ? { ...f, subfolders: updatedSubfolders } : f)
+      );
+
+      if (activeFolderId === parentFolderId && activeSubfolderId === subfolderId) {
+        setActiveSubfolderId(null);
+      }
+
+      showToast("Alt Klasör Silindi", `"${subfolderName}" alt klasörü başarıyla silindi.`, "success");
+    } catch (err) {
+      console.error(err);
+      showToast("Hata", "Alt klasör silinirken bir hata oluştu.", "error");
+    }
+  };
+
   const getActiveFolder = () => {
     return folders.find((f) => f.id === activeFolderId) || null;
   };
@@ -1010,97 +1185,228 @@ function App() {
               {activeSection === "admin" && isAdmin ? (
                 /* --- Admin Panel Pane --- */
                 <div style={{ display: "flex", flexDirection: "column", gap: "24px", animation: "fadeIn 0.4s ease-out" }}>
-                  <div className="leaderboard-board glass" style={{ padding: "32px", border: "1px solid rgba(139, 92, 246, 0.2)" }}>
-                    <h2 className="section-title" style={{ fontSize: "22px", marginBottom: "6px", color: "var(--text-primary)" }}>
-                      ⚙️ TusKıran Yönetici Paneli
-                    </h2>
-                    <p className="section-subtitle" style={{ fontSize: "13px", color: "var(--text-muted)", marginBottom: "28px" }}>
-                      Sitenize kolayca yeni videolar ekleyin. Bunny.net normal izleme linklerini sistem otomatik olarak güvenli embed formatına dönüştürecektir.
-                    </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(360px, 1fr))", gap: "28px", width: "100%" }}>
+                    
+                    {/* LEFT PANEL: Video Ekle */}
+                    <div className="leaderboard-board glass" style={{ padding: "32px", border: "1px solid rgba(139, 92, 246, 0.2)", height: "fit-content" }}>
+                      <h2 className="section-title" style={{ fontSize: "20px", marginBottom: "6px", color: "var(--text-primary)" }}>
+                        🎥 Video Ekleme
+                      </h2>
+                      <p className="section-subtitle" style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "24px" }}>
+                        Bunny.net veya Cloudflare linkini anında sisteme ekleyin.
+                      </p>
 
-                    <form onSubmit={handleAdminAddVideo} style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "600px" }}>
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "8px", color: "var(--text-secondary)" }}>Video Başlığı</label>
-                        <div className="input-container">
-                          <input
-                            type="text"
-                            placeholder="Örn: 03 Genel Farmakoloji Dağılım"
-                            className="input-field"
-                            style={{ paddingLeft: "16px" }}
-                            value={adminTitle}
-                            onChange={(e) => setAdminTitle(e.target.value)}
-                            required
-                          />
-                        </div>
-                      </div>
-
-                      <div className="form-group" style={{ marginBottom: 0 }}>
-                        <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "8px", color: "var(--text-secondary)" }}>Video Linki (Bunny.net veya Cloudflare)</label>
-                        <div className="input-container">
-                          <input
-                            type="text"
-                            placeholder="Örn: https://player.mediadelivery.net/play/..."
-                            className="input-field"
-                            style={{ paddingLeft: "16px" }}
-                            value={adminUrl}
-                            onChange={(e) => setAdminUrl(e.target.value)}
-                            required
-                          />
-                        </div>
-                        <span style={{ fontSize: "11px", color: "var(--text-muted)", marginTop: "6px", display: "block" }}>
-                          Bunny'den kopyaladığınız normal izleme veya embed linkini doğrudan yapıştırabilirsiniz.
-                        </span>
-                      </div>
-
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                      <form onSubmit={handleAdminAddVideo} style={{ display: "flex", flexDirection: "column", gap: "18px" }}>
                         <div className="form-group" style={{ marginBottom: 0 }}>
-                          <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "8px", color: "var(--text-secondary)" }}>Klasör Seçimi</label>
-                          <select 
-                            className="input-field" 
-                            style={{ paddingLeft: "12px", background: "rgba(8, 9, 13, 0.8)", cursor: "pointer", color: "var(--text-primary)" }}
-                            value={adminFolderId}
-                            onChange={(e) => { setAdminFolderId(e.target.value); setAdminSubfolderId(""); }}
-                            required
-                          >
-                            <option value="">Klasör Seçin...</option>
-                            {folders.map(f => (
-                              <option key={f.id} value={f.id} style={{ background: "#0c0d12", color: "var(--text-primary)" }}>{getFolderName(f)}</option>
-                            ))}
-                          </select>
+                          <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px", color: "var(--text-secondary)" }}>Video Başlığı</label>
+                          <div className="input-container">
+                            <input
+                              type="text"
+                              placeholder="Örn: 03 Genel Farmakoloji Dağılım"
+                              className="input-field"
+                              style={{ paddingLeft: "16px", height: "45px" }}
+                              value={adminTitle}
+                              onChange={(e) => setAdminTitle(e.target.value)}
+                              required
+                            />
+                          </div>
                         </div>
 
-                        {selectedAdminFolder && Array.isArray(selectedAdminFolder.subfolders) && selectedAdminFolder.subfolders.length > 0 && (
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px", color: "var(--text-secondary)" }}>Video Linki</label>
+                          <div className="input-container">
+                            <input
+                              type="text"
+                              placeholder="Örn: https://player.mediadelivery.net/play/..."
+                              className="input-field"
+                              style={{ paddingLeft: "16px", height: "45px" }}
+                              value={adminUrl}
+                              onChange={(e) => setAdminUrl(e.target.value)}
+                              required
+                            />
+                          </div>
+                        </div>
+
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                           <div className="form-group" style={{ marginBottom: 0 }}>
-                            <label style={{ display: "block", fontSize: "13px", fontWeight: "600", marginBottom: "8px", color: "var(--text-secondary)" }}>Alt Klasör Seçimi</label>
+                            <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px", color: "var(--text-secondary)" }}>Klasör Seçimi</label>
                             <select 
                               className="input-field" 
-                              style={{ paddingLeft: "12px", background: "rgba(8, 9, 13, 0.8)", cursor: "pointer", color: "var(--text-primary)" }}
-                              value={adminSubfolderId}
-                              onChange={(e) => setAdminSubfolderId(e.target.value)}
+                              style={{ paddingLeft: "12px", background: "rgba(8, 9, 13, 0.8)", cursor: "pointer", color: "var(--text-primary)", height: "45px" }}
+                              value={adminFolderId}
+                              onChange={(e) => { setAdminFolderId(e.target.value); setAdminSubfolderId(""); }}
                               required
                             >
-                              <option value="">Alt Klasör Seçin...</option>
-                              {selectedAdminFolder.subfolders.filter(sf => sf !== null).map(sf => (
-                                <option key={sf.id} value={sf.id} style={{ background: "#0c0d12", color: "var(--text-primary)" }}>{getSubfolderName(sf)}</option>
+                              <option value="">Klasör Seç...</option>
+                              {folders.map(f => (
+                                <option key={f.id} value={f.id} style={{ background: "#0c0d12" }}>{getFolderName(f)}</option>
                               ))}
                             </select>
                           </div>
-                        )}
+
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px", color: "var(--text-secondary)" }}>Alt Klasör Seçimi</label>
+                            <select 
+                              className="input-field" 
+                              style={{ paddingLeft: "12px", background: "rgba(8, 9, 13, 0.8)", cursor: "pointer", color: "var(--text-primary)", height: "45px" }}
+                              value={adminSubfolderId}
+                              onChange={(e) => setAdminSubfolderId(e.target.value)}
+                              disabled={!selectedAdminFolder || !Array.isArray(selectedAdminFolder.subfolders) || selectedAdminFolder.subfolders.length === 0}
+                            >
+                              <option value="">Alt Klasör Seç...</option>
+                              {selectedAdminFolder && Array.isArray(selectedAdminFolder.subfolders) && selectedAdminFolder.subfolders.filter(sf => sf !== null).map(sf => (
+                                <option key={sf.id} value={sf.id} style={{ background: "#0c0d12" }}>{getSubfolderName(sf)}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <button
+                          type="submit"
+                          className={`login-button ${isAddingVideo ? "loading" : ""}`}
+                          style={{ marginTop: "10px", background: "linear-gradient(135deg, var(--accent-purple), #9333ea)", padding: "12px" }}
+                          disabled={isAddingVideo}
+                        >
+                          {isAddingVideo ? (
+                            <span className="login-button-spinner"></span>
+                          ) : (
+                            "Videoyu Ekle 🚀"
+                          )}
+                        </button>
+                      </form>
+                    </div>
+
+                    {/* RIGHT PANEL: Klasör Yönetimi */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                      
+                      {/* Sub-Card 1: Klasör Ekleme Formları */}
+                      <div className="leaderboard-board glass" style={{ padding: "32px", border: "1px solid rgba(139, 92, 246, 0.2)", height: "fit-content" }}>
+                        <h2 className="section-title" style={{ fontSize: "20px", marginBottom: "6px", color: "var(--text-primary)" }}>
+                          📁 Klasör Oluşturma
+                        </h2>
+                        
+                        <div style={{ display: "flex", flexDirection: "column", gap: "20px", marginTop: "20px" }}>
+                          
+                          {/* Form 1: Ana Klasör Ekle */}
+                          <form onSubmit={handleAddFolder} style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: "20px" }}>
+                            <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
+                              <div className="form-group" style={{ marginBottom: 0, flexGrow: 1 }}>
+                                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px", color: "var(--text-secondary)" }}>Yeni Ana Klasör Adı</label>
+                                <input
+                                  type="text"
+                                  placeholder="Örn: Biyokimya"
+                                  className="input-field"
+                                  style={{ paddingLeft: "16px", height: "45px" }}
+                                  value={newFolderName}
+                                  onChange={(e) => setNewFolderName(e.target.value)}
+                                  required
+                                />
+                              </div>
+                              <button
+                                type="submit"
+                                className={`login-button ${isAddingFolder ? "loading" : ""}`}
+                                style={{ background: "var(--accent-purple)", width: "120px", padding: "12px", margin: 0, height: "45px" }}
+                                disabled={isAddingFolder}
+                              >
+                                {isAddingFolder ? <span className="login-button-spinner"></span> : "Klasör Ekle"}
+                              </button>
+                            </div>
+                          </form>
+
+                          {/* Form 2: Alt Klasör Ekle */}
+                          <form onSubmit={handleAddSubfolder}>
+                            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                              <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "var(--text-secondary)" }}>Yeni Alt Klasör Oluştur</label>
+                              <div style={{ display: "flex", gap: "10px", alignItems: "flex-end" }}>
+                                <select 
+                                  className="input-field" 
+                                  style={{ paddingLeft: "12px", background: "rgba(8, 9, 13, 0.8)", cursor: "pointer", color: "var(--text-primary)", height: "45px", width: "160px" }}
+                                  value={subfolderParentId}
+                                  onChange={(e) => setSubfolderParentId(e.target.value)}
+                                  required
+                                >
+                                  <option value="">Ana Klasör...</option>
+                                  {folders.map(f => (
+                                    <option key={f.id} value={f.id} style={{ background: "#0c0d12" }}>{getFolderName(f)}</option>
+                                  ))}
+                                </select>
+                                <input
+                                  type="text"
+                                  placeholder="Örn: Lipit Metabolizması"
+                                  className="input-field"
+                                  style={{ paddingLeft: "16px", height: "45px", flexGrow: 1 }}
+                                  value={newSubfolderName}
+                                  onChange={(e) => setNewSubfolderName(e.target.value)}
+                                  required
+                                />
+                                <button
+                                  type="submit"
+                                  className={`login-button ${isAddingSubfolder ? "loading" : ""}`}
+                                  style={{ background: "var(--accent-purple)", width: "120px", padding: "12px", margin: 0, height: "45px" }}
+                                  disabled={isAddingSubfolder}
+                                >
+                                  {isAddingSubfolder ? <span className="login-button-spinner"></span> : "Alt Klasör"}
+                                </button>
+                              </div>
+                            </div>
+                          </form>
+
+                        </div>
                       </div>
 
-                      <button
-                        type="submit"
-                        className={`login-button ${isAddingVideo ? "loading" : ""}`}
-                        style={{ marginTop: "12px", background: "linear-gradient(135deg, var(--accent-purple), #9333ea)" }}
-                        disabled={isAddingVideo}
-                      >
-                        {isAddingVideo ? (
-                          <span className="login-button-spinner"></span>
-                        ) : (
-                          "Videoyu Başarıyla Ekle 🚀"
-                        )}
-                      </button>
-                    </form>
+                      {/* Sub-Card 2: Mevcut Klasör Ağacı ve Düzenleme */}
+                      <div className="leaderboard-board glass" style={{ padding: "32px", border: "1px solid rgba(139, 92, 246, 0.2)", height: "fit-content" }}>
+                        <h2 className="section-title" style={{ fontSize: "20px", marginBottom: "6px", color: "var(--text-primary)" }}>
+                          🌳 Klasör Listesi & Yapı Yönetimi
+                        </h2>
+                        <p className="section-subtitle" style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "20px" }}>
+                          Sitedeki aktif klasör ve alt klasör ağacı.
+                        </p>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "300px", overflowY: "auto", paddingRight: "6px" }}>
+                          {folders.map(f => {
+                            const hasSub = Array.isArray(f.subfolders) && f.subfolders.length > 0;
+                            return (
+                              <div key={f.id} style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "10px", padding: "12px" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <span style={{ fontWeight: "600", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px", color: "var(--text-primary)" }}>
+                                    📁 {getFolderName(f)}
+                                  </span>
+                                  <button 
+                                    className="btn-signout" 
+                                    style={{ padding: "4px 8px", fontSize: "11px", height: "24px", margin: 0 }}
+                                    onClick={() => handleDeleteFolder(f.id)}
+                                  >
+                                    Klasörü Sil 🗑
+                                  </button>
+                                </div>
+
+                                {hasSub && (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: "6px", paddingLeft: "20px", marginTop: "8px", borderLeft: "1px dashed rgba(255,255,255,0.1)" }}>
+                                    {f.subfolders.filter(sf => sf !== null).map(sf => (
+                                      <div key={sf.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "rgba(255,255,255,0.01)", padding: "6px 8px", borderRadius: "6px" }}>
+                                        <span style={{ fontSize: "12px", color: "var(--text-secondary)", display: "flex", alignItems: "center", gap: "6px" }}>
+                                          ↳ 📁 {getSubfolderName(sf)}
+                                        </span>
+                                        <button 
+                                          className="btn-signout" 
+                                          style={{ padding: "3px 6px", fontSize: "10px", height: "20px", margin: 0, opacity: 0.8 }}
+                                          onClick={() => handleDeleteSubfolder(f.id, sf.id)}
+                                        >
+                                          Alt Klasörü Sil 🗑
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                    </div>
+
                   </div>
                 </div>
               ) : activeSection === "leaderboard" ? (
