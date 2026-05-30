@@ -127,6 +127,15 @@ function App() {
   const [adminSubfolderId, setAdminSubfolderId] = useState("");
   const [isAddingVideo, setIsAddingVideo] = useState(false);
 
+  // Bulk import state variables
+  const [bulkImportMode, setBulkImportMode] = useState("json"); // "json" or "text"
+  const [bulkInputText, setBulkInputText] = useState("");
+  const [bulkDefaultLibraryId, setBulkDefaultLibraryId] = useState("");
+  const [bulkImportFolderId, setBulkImportFolderId] = useState("");
+  const [bulkImportSubfolderId, setBulkImportSubfolderId] = useState("");
+  const [parsedVideos, setParsedVideos] = useState([]);
+  const [isBulkImporting, setIsBulkImporting] = useState(false);
+
   // Admin folder management states
   const [newFolderName, setNewFolderName] = useState("");
   const [newSubfolderName, setNewSubfolderName] = useState("");
@@ -886,6 +895,189 @@ function App() {
     }
   };
 
+  const handleParseBulkVideos = () => {
+    if (!bulkInputText.trim()) {
+      showToast("Hata", "Lütfen ayrıştırılacak veriyi girin.", "error");
+      return;
+    }
+
+    try {
+      let videos = [];
+      if (bulkImportMode === "json") {
+        const parsedJson = JSON.parse(bulkInputText.trim());
+        let list = [];
+        if (Array.isArray(parsedJson)) {
+          list = parsedJson;
+        } else if (parsedJson.items && Array.isArray(parsedJson.items)) {
+          list = parsedJson.items;
+        } else if (parsedJson.data && Array.isArray(parsedJson.data)) {
+          list = parsedJson.data;
+        } else {
+          list = [parsedJson];
+        }
+
+        videos = list.map((item, index) => {
+          const title = item.title || item.name || item.label || `Video #${index + 1}`;
+          const guid = item.guid || item.id || item.videoId || "";
+          
+          let libraryId = item.videoLibraryId || item.libraryId || bulkDefaultLibraryId.trim();
+          
+          let url = item.url || item.link || "";
+          if (guid && libraryId) {
+            url = `https://iframe.mediadelivery.net/embed/${libraryId}/${guid}?autoplay=false`;
+          } else if (guid) {
+            url = `https://iframe.mediadelivery.net/embed/MISSING_LIB_ID/${guid}?autoplay=false`;
+          }
+
+          return {
+            title: title.trim(),
+            url: url.trim(),
+            checked: true
+          };
+        });
+      } else {
+        const lines = bulkInputText.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+        videos = lines.map((line, index) => {
+          let title = "";
+          let url = "";
+
+          const urlMatch = line.match(/(https?:\/\/[^\s,]+)/);
+          if (urlMatch) {
+            url = urlMatch[1];
+            title = line.replace(url, "").replace(/^[,\s\t\-:]+|[,\s\t\-:]+$/g, "").trim();
+          } else {
+            title = line;
+          }
+
+          if (url.includes("player.mediadelivery.net/play/") || url.includes("mediadelivery.net/play/")) {
+            url = url.replace("player.mediadelivery.net/play/", "iframe.mediadelivery.net/embed/");
+            url = url.replace("mediadelivery.net/play/", "iframe.mediadelivery.net/embed/");
+            if (!url.includes("?")) {
+              url += "?autoplay=false";
+            }
+          }
+
+          if (!title) {
+            title = `Video #${index + 1}`;
+          }
+
+          return {
+            title: title,
+            url: url,
+            checked: true
+          };
+        });
+      }
+
+      videos = videos.filter(v => v.title || v.url);
+
+      if (videos.length === 0) {
+        showToast("Uyarı", "Geçerli video bulunamadı.", "error");
+      } else {
+        setParsedVideos(videos);
+        showToast("Başarılı", `${videos.length} video başarıyla ayrıştırıldı! Şimdi hedefleri seçip aktarabilirsiniz.`, "success");
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Ayrıştırma Hatası", "Veri ayrıştırılamadı. Lütfen formatı kontrol edin. JSON ise geçerli bir JSON olmalıdır.", "error");
+    }
+  };
+
+  const handleBulkImport = async (e) => {
+    if (e) e.preventDefault();
+    const selectedVideos = parsedVideos.filter(v => v.checked !== false).map(v => ({
+      title: v.title,
+      url: v.url
+    }));
+
+    if (selectedVideos.length === 0) {
+      showToast("Eksik Bilgi", "Lütfen içe aktarmak için en az bir video seçin.", "error");
+      return;
+    }
+    if (!bulkImportFolderId) {
+      showToast("Eksik Bilgi", "Lütfen hedef klasörü seçin.", "error");
+      return;
+    }
+
+    setIsBulkImporting(true);
+    try {
+      const folderDocRef = doc(db, "folders", bulkImportFolderId);
+      const folderDocSnap = await getDoc(folderDocRef);
+
+      if (!folderDocSnap.exists()) {
+        showToast("Hata", "Seçilen klasör veritabanında bulunamadı.", "error");
+        setIsBulkImporting(false);
+        return;
+      }
+
+      const folderData = folderDocSnap.data();
+      let updatedVideos;
+      let updatedSubfolders;
+
+      const hasMissingLib = selectedVideos.some(v => v.url.includes("MISSING_LIB_ID"));
+      if (hasMissingLib && !bulkDefaultLibraryId.trim()) {
+        showToast("Eksik Bilgi", "Bazı videolarda Kütüphane ID bulunamadı. Lütfen varsayılan Kütüphane ID alanını doldurup tekrar ayrıştırın.", "error");
+        setIsBulkImporting(false);
+        return;
+      }
+
+      const finalVideos = selectedVideos.map(v => {
+        if (v.url.includes("MISSING_LIB_ID")) {
+          return {
+            ...v,
+            url: v.url.replace("MISSING_LIB_ID", bulkDefaultLibraryId.trim())
+          };
+        }
+        return v;
+      });
+
+      if (bulkImportSubfolderId) {
+        const subfolders = folderData.subfolders || [];
+        updatedSubfolders = subfolders.map(sf => {
+          if (sf.id === bulkImportSubfolderId) {
+            const currentVideos = Array.isArray(sf.videos) ? sf.videos : [];
+            return { ...sf, videos: [...currentVideos, ...finalVideos] };
+          }
+          return sf;
+        });
+
+        await updateDoc(folderDocRef, { subfolders: updatedSubfolders });
+
+        setFolders(prev =>
+          prev.map(f => f.id === bulkImportFolderId ? { ...f, subfolders: updatedSubfolders } : f)
+        );
+      } else {
+        const currentVideos = Array.isArray(folderData.videos) ? folderData.videos : [];
+        updatedVideos = [...currentVideos, ...finalVideos];
+
+        await updateDoc(folderDocRef, { videos: updatedVideos });
+
+        setFolders(prev =>
+          prev.map(f => f.id === bulkImportFolderId ? { ...f, videos: updatedVideos } : f)
+        );
+      }
+
+      showToast("Başarılı", `${finalVideos.length} video başarıyla toplu olarak eklendi! 🚀`, "success");
+      setBulkInputText("");
+      setParsedVideos([]);
+      
+      setActiveFolderId(bulkImportFolderId);
+      if (bulkImportSubfolderId) {
+        setActiveSubfolderId(bulkImportSubfolderId);
+        setExpandedFolderIds(prev => ({ ...prev, [bulkImportFolderId]: true }));
+      } else {
+        setActiveSubfolderId(null);
+      }
+      setActiveSection("folders");
+
+    } catch (err) {
+      console.error(err);
+      showToast("Hata", "Videolar toplu eklenirken bir hata oluştu.", "error");
+    } finally {
+      setIsBulkImporting(false);
+    }
+  };
+
   const getActiveFolder = () => {
     return folders.find((f) => f.id === activeFolderId) || null;
   };
@@ -1432,6 +1624,276 @@ function App() {
                           })}
                         </div>
                       </div>
+
+                    </div>
+
+                    {/* FULL-WIDTH CARD: Toplu Video İçe Aktarma */}
+                    <div className="leaderboard-board glass" style={{ padding: "32px", border: "1px solid rgba(139, 92, 246, 0.3)", marginTop: "12px" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "20px" }}>
+                        <div>
+                          <h2 className="section-title" style={{ fontSize: "20px", display: "flex", alignItems: "center", gap: "10px", color: "var(--text-primary)" }}>
+                            📦 Toplu Video İçe Aktarma (Bunny.net)
+                          </h2>
+                          <p className="section-subtitle" style={{ fontSize: "12px", color: "var(--text-muted)", marginTop: "4px" }}>
+                            Video listesini toplu olarak yükleyin ve saniyeler içinde klasörlere aktarın.
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Tab buttons */}
+                      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: "12px" }}>
+                        <button
+                          type="button"
+                          onClick={() => { setBulkImportMode("json"); setParsedVideos([]); }}
+                          style={{
+                            padding: "8px 16px",
+                            borderRadius: "8px",
+                            border: "1px solid " + (bulkImportMode === "json" ? "var(--accent-purple)" : "rgba(255,255,255,0.08)"),
+                            background: bulkImportMode === "json" ? "rgba(139, 92, 246, 0.12)" : "rgba(255,255,255,0.02)",
+                            color: bulkImportMode === "json" ? "var(--accent-purple)" : "var(--text-secondary)",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            transition: "all 0.3s"
+                          }}
+                        >
+                          🌐 1. Yöntem: Tarayıcı Ağ Kaydı (JSON)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => { setBulkImportMode("text"); setParsedVideos([]); }}
+                          style={{
+                            padding: "8px 16px",
+                            borderRadius: "8px",
+                            border: "1px solid " + (bulkImportMode === "text" ? "var(--accent-purple)" : "rgba(255,255,255,0.08)"),
+                            background: bulkImportMode === "text" ? "rgba(139, 92, 246, 0.12)" : "rgba(255,255,255,0.02)",
+                            color: bulkImportMode === "text" ? "var(--accent-purple)" : "var(--text-secondary)",
+                            cursor: "pointer",
+                            fontSize: "13px",
+                            fontWeight: "600",
+                            transition: "all 0.3s"
+                          }}
+                        >
+                          ✍️ 2. Yöntem: Satır Satır Link Yapıştırma
+                        </button>
+                      </div>
+
+                      {/* Instructions */}
+                      <div style={{ background: "rgba(255,255,255,0.01)", border: "1px solid rgba(255,255,255,0.04)", borderRadius: "10px", padding: "16px", marginBottom: "20px", fontSize: "12px", color: "var(--text-secondary)", lineHeight: "1.6" }}>
+                        {bulkImportMode === "json" ? (
+                          <>
+                            <strong style={{ color: "var(--text-primary)", display: "block", marginBottom: "8px" }}>💡 Nasıl Yapılır? (Tek tek link kopyalamaya son!)</strong>
+                            <ol style={{ paddingLeft: "20px", margin: 0, display: "flex", flexDirection: "column", gap: "6px" }}>
+                              <li>Bunny.net panelinize girip ilgili Video Library (Kütüphane) sayfasına tıklayın.</li>
+                              <li>Klavyenizden <strong>F12 (Öğeyi Denetle)</strong> tuşuna basıp tarayıcı araçlarından <strong>Ağ (Network)</strong> sekmesini seçin.</li>
+                              <li>Bunny sayfasını yenileyin ve Ağ sekmesindeki arama kutusuna <code>videos?</code> yazın.</li>
+                              <li>Arama sonucunda gelen isteğin üzerine tıklayın, sağ tarafta açılan panelden <strong>Response (Yanıt)</strong> sekmesine girin ve içindeki tüm yazıyı (JSON) kopyalayarak aşağıdaki kutuya yapıştırın.</li>
+                            </ol>
+                          </>
+                        ) : (
+                          <>
+                            <strong style={{ color: "var(--text-primary)", display: "block", marginBottom: "8px" }}>💡 Nasıl Yapılır?</strong>
+                            <p style={{ margin: 0 }}>
+                              Aşağıdaki kutuya her satıra bir video gelecek şekilde linklerinizi yapıştırın.<br />
+                              Format: <code>Video Başlığı, https://player.mediadelivery.net/play/...</code> ya da sadece link yapıştırın (başlık otomatik oluşturulur).
+                            </p>
+                          </>
+                        )}
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                        {bulkImportMode === "json" && (
+                          <div className="form-group" style={{ marginBottom: 0 }}>
+                            <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px", color: "var(--text-secondary)" }}>
+                              Varsayılan Bunny Kütüphane ID (Library ID) - <span style={{ color: "var(--text-muted)", fontWeight: "normal" }}>JSON içinde bulunamazsa kullanılır</span>
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="Örn: 242039"
+                              className="input-field"
+                              style={{ paddingLeft: "16px", height: "40px", maxWidth: "300px" }}
+                              value={bulkDefaultLibraryId}
+                              onChange={(e) => setBulkDefaultLibraryId(e.target.value)}
+                            />
+                          </div>
+                        )}
+
+                        <div className="form-group" style={{ marginBottom: 0 }}>
+                          <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px", color: "var(--text-secondary)" }}>
+                            {bulkImportMode === "json" ? "Kopyalanan Network Response (JSON) Verisi" : "Video Linkleri & Başlıkları"}
+                          </label>
+                          <textarea
+                            placeholder={bulkImportMode === "json" ? "JSON verisini buraya yapıştırın..." : "Örn:\n01 Giriş, https://iframe.mediadelivery.net/embed/...\n02 İkinci Bölüm, https://iframe.mediadelivery.net/embed/..."}
+                            className="input-field"
+                            style={{
+                              padding: "16px",
+                              height: "150px",
+                              fontFamily: bulkImportMode === "json" ? "monospace" : "inherit",
+                              fontSize: "12px",
+                              lineHeight: "1.5",
+                              resize: "vertical"
+                            }}
+                            value={bulkInputText}
+                            onChange={(e) => setBulkInputText(e.target.value)}
+                          />
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleParseBulkVideos}
+                          className="login-button"
+                          style={{
+                            background: "linear-gradient(135deg, var(--accent-purple), #9333ea)",
+                            padding: "12px",
+                            alignSelf: "flex-start",
+                            width: "auto",
+                            paddingLeft: "24px",
+                            paddingRight: "24px",
+                            fontSize: "14px",
+                            fontWeight: "600",
+                            borderRadius: "8px"
+                          }}
+                        >
+                          🔍 Videoları Ayrıştır & Önizle
+                        </button>
+                      </div>
+
+                      {/* Parsed list & Folder target */}
+                      {parsedVideos.length > 0 && (
+                        <div style={{ marginTop: "32px", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+                          
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <h3 style={{ fontSize: "16px", fontWeight: "600", color: "var(--text-primary)" }}>
+                              📋 Ayrıştırılan Videolar ({parsedVideos.filter(v => v.checked !== false).length}/{parsedVideos.length} Seçili)
+                            </h3>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const allChecked = parsedVideos.every(v => v.checked !== false);
+                                setParsedVideos(prev => prev.map(v => ({ ...v, checked: !allChecked })));
+                              }}
+                              style={{
+                                background: "rgba(255,255,255,0.05)",
+                                border: "1px solid rgba(255,255,255,0.1)",
+                                padding: "6px 12px",
+                                borderRadius: "6px",
+                                color: "var(--text-secondary)",
+                                fontSize: "12px",
+                                cursor: "pointer"
+                              }}
+                            >
+                              {parsedVideos.every(v => v.checked !== false) ? "Tüm Seçimleri Kaldır" : "Tümünü Seç"}
+                            </button>
+                          </div>
+
+                          {/* Preview video list */}
+                          <div style={{ maxHeight: "250px", overflowY: "auto", border: "1px solid rgba(255,255,255,0.05)", borderRadius: "8px", background: "rgba(0,0,0,0.2)" }}>
+                            <table style={{ width: "100%", borderCollapse: "collapse", textAlign: "left", fontSize: "13px" }}>
+                              <thead>
+                                <tr style={{ background: "rgba(255,255,255,0.02)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+                                  <th style={{ padding: "10px", width: "40px" }}></th>
+                                  <th style={{ padding: "10px", width: "40px", color: "var(--text-muted)" }}>#</th>
+                                  <th style={{ padding: "10px", color: "var(--text-muted)" }}>Video Başlığı (Düzenlenebilir)</th>
+                                  <th style={{ padding: "10px", color: "var(--text-muted)" }}>Embed Linki</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {parsedVideos.map((video, idx) => (
+                                  <tr key={idx} style={{ borderBottom: "1px solid rgba(255,255,255,0.02)", opacity: video.checked !== false ? 1 : 0.5 }}>
+                                    <td style={{ padding: "10px", textAlign: "center" }}>
+                                      <input
+                                        type="checkbox"
+                                        checked={video.checked !== false}
+                                        onChange={() => {
+                                          setParsedVideos(prev => prev.map((v, i) => i === idx ? { ...v, checked: !v.checked } : v));
+                                        }}
+                                        style={{ cursor: "pointer", width: "16px", height: "16px", accentColor: "var(--accent-purple)" }}
+                                      />
+                                    </td>
+                                    <td style={{ padding: "10px", color: "var(--text-muted)" }}>{idx + 1}</td>
+                                    <td style={{ padding: "10px" }}>
+                                      <input
+                                        type="text"
+                                        className="input-field"
+                                        style={{
+                                          height: "32px",
+                                          padding: "0 10px",
+                                          fontSize: "13px",
+                                          background: "rgba(255,255,255,0.02)",
+                                          border: "1px solid rgba(255,255,255,0.05)"
+                                        }}
+                                        value={video.title}
+                                        onChange={(e) => {
+                                          const val = e.target.value;
+                                          setParsedVideos(prev => prev.map((v, i) => i === idx ? { ...v, title: val } : v));
+                                        }}
+                                      />
+                                    </td>
+                                    <td style={{ padding: "10px", fontFamily: "monospace", fontSize: "11px", color: "var(--text-muted)", maxWidth: "250px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                      {video.url}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Destination Folder Setup */}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", background: "rgba(255,255,255,0.02)", padding: "20px", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.04)" }}>
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px", color: "var(--text-secondary)" }}>Hedef Ana Klasör</label>
+                              <select 
+                                className="input-field" 
+                                style={{ paddingLeft: "12px", background: "rgba(8, 9, 13, 0.8)", cursor: "pointer", color: "var(--text-primary)", height: "45px" }}
+                                value={bulkImportFolderId}
+                                onChange={(e) => { setBulkImportFolderId(e.target.value); setBulkImportSubfolderId(""); }}
+                                required
+                              >
+                                <option value="">Hedef Klasör Seçin...</option>
+                                {folders.map(f => (
+                                  <option key={f.id} value={f.id} style={{ background: "#0c0d12" }}>{getFolderName(f)}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <div className="form-group" style={{ marginBottom: 0 }}>
+                              <label style={{ display: "block", fontSize: "12px", fontWeight: "600", marginBottom: "6px", color: "var(--text-secondary)" }}>Hedef Alt Klasör (Opsiyonel)</label>
+                              <select 
+                                className="input-field" 
+                                style={{ paddingLeft: "12px", background: "rgba(8, 9, 13, 0.8)", cursor: "pointer", color: "var(--text-primary)", height: "45px" }}
+                                value={bulkImportSubfolderId}
+                                onChange={(e) => setBulkImportSubfolderId(e.target.value)}
+                                disabled={!bulkImportFolderId || !folders.find(f => f.id === bulkImportFolderId)?.subfolders?.length}
+                              >
+                                <option value="">Alt Klasör Yok (Doğrudan Klasöre Ekle)...</option>
+                                {bulkImportFolderId && folders.find(f => f.id === bulkImportFolderId)?.subfolders?.filter(sf => sf !== null).map(sf => (
+                                  <option key={sf.id} value={sf.id} style={{ background: "#0c0d12" }}>{getSubfolderName(sf)}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={handleBulkImport}
+                            className={`login-button ${isBulkImporting ? "loading" : ""}`}
+                            style={{
+                              background: "linear-gradient(135deg, #10b981, #059669)",
+                              padding: "14px",
+                              fontWeight: "700",
+                              fontSize: "15px",
+                              disabled: isBulkImporting
+                            }}
+                          >
+                            {isBulkImporting ? (
+                              <span className="login-button-spinner"></span>
+                            ) : (
+                              `🚀 Seçilen ${parsedVideos.filter(v => v.checked !== false).length} Videoyu İçe Aktar!`
+                            )}
+                          </button>
+
+                        </div>
+                      )}
 
                     </div>
 
